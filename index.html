@@ -3314,8 +3314,27 @@
                 }
                 if (confirm(`¿Estás seguro de eliminar el registro del lote ${item.lote}?`)) {
                     lotesData = lotesData.filter(x => x.id !== id);
-                    actualizarUI();
-                    mostrarToast('Lote eliminado');
+                    
+                    // Forzar subida inmediata a la nube para reflejar el borrado y evitar que el polling lo reponga
+                    fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Master-Key': API_KEY
+                        },
+                        body: JSON.stringify({
+                            usuarios: usuariosLista,
+                            lotes: lotesData,
+                            turnoMetros: turnoMetrosData,
+                            notificaciones: notificacionesData
+                        })
+                    }).then(() => {
+                        actualizarUI();
+                        mostrarToast('Lote eliminado y sincronizado en la nube');
+                    }).catch(err => {
+                        console.error("Error al actualizar la nube tras eliminar", err);
+                        actualizarUI();
+                    });
                 }
             };
 
