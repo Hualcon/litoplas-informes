@@ -1590,6 +1590,7 @@
                 novedadesItems.forEach(nov => {
                     notificacionesData.unshift({
                         id: 'NOTIF-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+                        loteId: loteItem.id,
                         proceso: proc,
                         lote: loteItem.lote,
                         referencia: loteItem.referencia,
@@ -1598,6 +1599,7 @@
                         fecha: loteItem.fechaTurno,
                         tipoNovedad: nov.tipo,
                         mensaje: nov.detalle,
+                        foto: nov.foto || '',
                         destinatarios: destinatarios,
                         leida: false,
                         timestamp: new Date().toLocaleString()
@@ -1652,12 +1654,32 @@
                 emptyNotifMsg.classList.add('hidden');
 
                 cont.innerHTML = misNotificaciones.map(n => {
+                    let fotoSrc = n.foto || '';
+                    if (!fotoSrc) {
+                        // Búsqueda de respaldo en el lote original por si la notificación no la guardó directamente
+                        const loteAsoc = lotesData.find(l => l.id === n.loteId || (l.lote === n.lote && (l.proceso || 'Corte') === n.proceso));
+                        if (loteAsoc) {
+                            if (n.tipoNovedad === 'Rechazo' && loteAsoc.rechazos) {
+                                const r = loteAsoc.rechazos.find(x => x.fotoBase64);
+                                if (r) fotoSrc = r.fotoBase64;
+                            } else if (n.tipoNovedad === 'Retención' && loteAsoc.retenciones) {
+                                const ret = loteAsoc.retenciones.find(x => x.fotoBase64);
+                                if (ret) fotoSrc = ret.fotoBase64;
+                            } else if (loteAsoc.isExportacion) {
+                                const p = (loteAsoc.pallets || []).find(x => x.fotoBase64);
+                                const s = (loteAsoc.segregacion || []).find(x => x.fotoBase64);
+                                if (p) fotoSrc = p.fotoBase64;
+                                else if (s) fotoSrc = s.fotoBase64;
+                            }
+                        }
+                    }
+
                     let fotoHTML = '';
-                    if (n.foto) {
+                    if (fotoSrc) {
                         fotoHTML = `
                             <div class="mt-2 flex items-center space-x-2">
-                                <img src="${n.foto}" onclick="verFotoModal(this.src)" class="w-14 h-14 object-cover rounded-lg border border-slate-300 cursor-pointer shadow-sm hover:opacity-90" title="Ver foto de la novedad">
-                                <span class="text-[10px] text-sky-700 italic">Clic en la foto para ampliar</span>
+                                <img src="${fotoSrc}" onclick="verFotoModal(this.src)" class="w-14 h-14 object-cover rounded-lg border border-slate-300 cursor-pointer shadow-sm hover:opacity-90" title="Ver foto de la novedad">
+                                <span class="text-[10px] text-sky-700 italic cursor-pointer font-semibold" onclick="verFotoModal('${fotoSrc}')">Clic en la foto para ampliar</span>
                             </div>
                         `;
                     }
