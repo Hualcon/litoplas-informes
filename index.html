@@ -182,6 +182,11 @@
                     <span id="badgeNotifCount" class="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[9px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center hidden">0</span>
                 </button>
 
+                <button id="btnAbrirRechazosProceso" class="bg-gradient-to-r from-rose-900/90 to-slate-900 hover:from-rose-800 hover:to-slate-800 text-rose-200 border border-rose-500/40 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow" title="Auditoría, Estadísticas e Indicadores de Rechazos al Proceso">
+                    <i class="fa-solid fa-chart-pie text-rose-400"></i>
+                    <span>Rechazos al Proceso</span>
+                </button>
+
                 <button id="btnConfigFormulario" class="admin-only bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow">
                     <i class="fa-solid fa-sliders"></i>
                     <span>Personalizar Campos y Causales</span>
@@ -1110,11 +1115,17 @@
                 </button>
             </div>
             <div class="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-                <div class="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
-                    <p class="text-slate-600">Notificaciones de novedades en <strong>Rechazos, Retenciones y Sistema de Inventario</strong> para tu usuario y rol en el proceso.</p>
-                    <button type="button" id="btnMarcarLeidasNotif" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg font-bold text-[11px] whitespace-nowrap">
-                        Marcar todo como leído
-                    </button>
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <p class="text-slate-600">Notificaciones de novedades en <strong>Rechazos, Retenciones y Sistema de Inventario</strong>.</p>
+                    <div class="flex items-center space-x-2">
+                        <button type="button" id="btnMarcarLeidasNotif" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg font-bold text-[11px] whitespace-nowrap">
+                            Marcar leídas
+                        </button>
+                        <button type="button" id="btnVaciarBandejaNotif" class="bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 px-3 py-1.5 rounded-lg font-bold text-[11px] whitespace-nowrap flex items-center space-x-1" title="Limpiar y vaciar las notificaciones de tu bandeja sin perder el registro de lotes">
+                            <i class="fa-solid fa-trash-can text-[10px]"></i>
+                            <span>Limpiar Bandeja</span>
+                        </button>
+                    </div>
                 </div>
                 <div id="listaBandejaNotifContainer" class="space-y-3"></div>
                 <div id="emptyNotifMsg" class="hidden py-10 text-center text-slate-400 italic">
@@ -1164,6 +1175,158 @@
                     <button type="button" id="btnMarcarEstaLeida" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl font-bold shadow-sm">
                         Entendido / Marcar como leída
                     </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ==================== MODAL INDICADORES Y RECHAZOS AL PROCESO ==================== -->
+    <div id="modalRechazosProceso" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-3 sm:p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden fade-in text-xs flex flex-col max-h-[90vh]">
+            <div class="bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 px-6 py-4 flex justify-between items-center text-white border-b border-rose-900/40 flex-shrink-0">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-rose-500/20 text-rose-400 p-2 rounded-xl border border-rose-500/30">
+                        <i class="fa-solid fa-chart-pie text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center space-x-2">
+                            <h3 class="font-extrabold text-sm sm:text-base tracking-wide text-white uppercase">Rechazos e Indicadores al Proceso</h3>
+                            <span id="rpBadgeProcesoActual" class="bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">CORTE</span>
+                        </div>
+                        <p class="text-[11px] text-slate-300">Auditoría detallada, pareto de causales y métricas de calidad</p>
+                    </div>
+                </div>
+                <button type="button" id="btnCerrarRechazosProceso" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div class="p-4 sm:p-6 space-y-4 overflow-y-auto flex-grow">
+                <!-- Filtros del Módulo de Rechazos -->
+                <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                        <span class="text-[11px] font-bold uppercase text-slate-600 flex items-center">
+                            <i class="fa-solid fa-filter text-rose-600 mr-1.5"></i> Filtros de Auditoría
+                        </span>
+                        <div class="flex items-center space-x-1.5">
+                            <span class="text-[10px] font-semibold text-slate-500">Periodo rápido:</span>
+                            <button type="button" onclick="setRangoRapidoRechazos('hoy')" class="px-2 py-1 bg-white hover:bg-rose-50 text-slate-700 border border-slate-300 rounded-lg text-[10px] font-bold">Hoy</button>
+                            <button type="button" onclick="setRangoRapidoRechazos('mes')" class="px-2 py-1 bg-white hover:bg-rose-50 text-slate-700 border border-slate-300 rounded-lg text-[10px] font-bold">Este Mes</button>
+                            <button type="button" onclick="setRangoRapidoRechazos('ano')" class="px-2 py-1 bg-white hover:bg-rose-50 text-slate-700 border border-slate-300 rounded-lg text-[10px] font-bold">Año Actual</button>
+                            <button type="button" onclick="setRangoRapidoRechazos('todo')" class="px-2 py-1 bg-white hover:bg-rose-50 text-slate-700 border border-slate-300 rounded-lg text-[10px] font-bold">Histórico Total</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 items-end">
+                        <div class="md:col-span-2">
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Rango de Fecha (Desde / Hasta)</label>
+                            <div class="flex items-center space-x-1.5">
+                                <input type="date" id="rpFiltroDesde" class="w-full bg-white border border-slate-300 rounded-xl px-2 py-1.5 text-xs font-semibold">
+                                <span class="text-xs text-slate-400 font-bold">a</span>
+                                <input type="date" id="rpFiltroHasta" class="w-full bg-white border border-slate-300 rounded-xl px-2 py-1.5 text-xs font-semibold">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Turno (12h)</label>
+                            <select id="rpFiltroTurno" class="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold">
+                                <option value="">Todos los Turnos</option>
+                                <option value="T1">T1 (6:00 AM - 6:00 PM)</option>
+                                <option value="T2">T2 (6:00 PM - 6:00 AM)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Proceso Causa Raíz</label>
+                            <select id="rpFiltroProcesoRaiz" class="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold">
+                                <option value="">Todos los Procesos</option>
+                                <option value="Extrusión">Extrusión</option>
+                                <option value="Impresión">Impresión</option>
+                                <option value="Laminación">Laminación</option>
+                                <option value="Extlam">Extlam</option>
+                                <option value="Corte">Corte</option>
+                                <option value="Sellado">Sellado</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold uppercase text-slate-500 mb-1">Gestor que Reportó</label>
+                            <select id="rpFiltroGestor" class="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold">
+                                <option value="">Todos los Gestores</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Cards de Rechazos -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div class="bg-rose-50/70 p-3.5 rounded-2xl border border-rose-200">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-rose-800 block">Kilos Rechazados</span>
+                        <h4 id="rpKpiKilos" class="text-xl sm:text-2xl font-black text-rose-900 mt-0.5">0.0 kg</h4>
+                        <span id="rpKpiKilosSub" class="text-[10px] text-rose-700 font-semibold block mt-0.5">En el periodo</span>
+                    </div>
+
+                    <div class="bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-slate-600 block">Unidades Afectadas</span>
+                        <h4 id="rpKpiUnidades" class="text-xl sm:text-2xl font-black text-slate-900 mt-0.5">0 unds</h4>
+                        <span class="text-[10px] text-slate-500 font-semibold block mt-0.5">Total no conformes</span>
+                    </div>
+
+                    <div class="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-amber-800 block">Eventos Reportados</span>
+                        <h4 id="rpKpiEventos" class="text-xl sm:text-2xl font-black text-amber-900 mt-0.5">0</h4>
+                        <span class="text-[10px] text-amber-700 font-semibold block mt-0.5">Novedades registradas</span>
+                    </div>
+
+                    <div class="bg-sky-50/70 p-3.5 rounded-2xl border border-sky-200">
+                        <span class="text-[10px] font-extrabold uppercase tracking-wider text-sky-800 block">Mayor Causa Raíz</span>
+                        <h4 id="rpKpiTopProceso" class="text-sm sm:text-base font-black text-sky-950 mt-1 truncate">Sin datos</h4>
+                        <span id="rpKpiTopProcesoKilos" class="text-[10px] text-sky-700 font-semibold block mt-0.5">0.0 kg (0%)</span>
+                    </div>
+                </div>
+
+                <!-- Distribución y Porcentajes de Causales / Defectos -->
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                    <div class="flex justify-between items-center">
+                        <h4 class="font-extrabold uppercase text-slate-800 text-xs flex items-center">
+                            <i class="fa-solid fa-bars-progress text-rose-600 mr-1.5"></i> Distribución Porcentual por Causal / Defecto
+                        </h4>
+                        <span class="text-[10px] text-slate-400 font-semibold">Calculado sobre kilos totales rechazados</span>
+                    </div>
+                    <div id="rpBarrasCausalesContainer" class="space-y-2 max-h-48 overflow-y-auto pr-1"></div>
+                </div>
+
+                <!-- Tabla de Rechazos Detallados -->
+                <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                    <div class="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                        <span class="font-extrabold uppercase text-slate-700 text-xs">
+                            <i class="fa-solid fa-list-check text-sky-600 mr-1"></i> Detalle de Rechazos Registrados
+                        </span>
+                        <button type="button" id="btnExportarExcelRechazosModulo" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded-xl text-xs font-bold flex items-center space-x-1 shadow-sm">
+                            <i class="fa-solid fa-file-excel"></i>
+                            <span>Exportar Rechazos</span>
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto max-h-64">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead class="bg-slate-100/90 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px] sticky top-0">
+                                <tr>
+                                    <th class="py-2.5 px-3">Fecha / Turno</th>
+                                    <th class="py-2.5 px-3">OT / Máquina</th>
+                                    <th class="py-2.5 px-3">Tipo / Origen Causa Raíz</th>
+                                    <th class="py-2.5 px-3">Defecto / Trazabilidad</th>
+                                    <th class="py-2.5 px-3 text-right">Kilos / Unds</th>
+                                    <th class="py-2.5 px-3">Gestor que Reportó</th>
+                                    <th class="py-2.5 px-3 text-center">Foto</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rpTablaRechazosBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
+                        </table>
+                    </div>
+                    <div id="rpEmptyState" class="hidden p-8 text-center text-slate-400 italic">
+                        No se encontraron rechazos con los filtros seleccionados.
+                    </div>
                 </div>
             </div>
         </div>
@@ -1876,6 +2039,366 @@
                     renderizarBandejaNotificaciones();
                 }
                 document.getElementById('modalDetalleNotif').classList.add('hidden');
+            });
+
+            
+            // ==================== VACIAR Y LIMPIAR BANDEJA DE NOTIFICACIONES ====================
+            document.getElementById('btnVaciarBandejaNotif').addEventListener('click', () => {
+                if (!usuarioActual) return;
+                const nombre = usuarioActual.nombre;
+                const cedula = usuarioActual.cedula;
+
+                const misNotifs = notificacionesData.filter(n => {
+                    const dest = n.destinatarios || [];
+                    return dest.includes(nombre) || dest.includes(cedula) || dest.includes("TODOS");
+                });
+
+                if (misNotifs.length === 0) {
+                    mostrarToast('Tu bandeja ya está vacía');
+                    return;
+                }
+
+                if (confirm('¿Deseas vaciar tu bandeja de notificaciones? Las notificaciones se eliminarán de tu vista, pero todos los datos de los lotes y el módulo de Rechazos al Proceso se conservarán intactos.')) {
+                    notificacionesData = notificacionesData.filter(n => {
+                        const dest = n.destinatarios || [];
+                        return !(dest.includes(nombre) || dest.includes(cedula) || dest.includes("TODOS"));
+                    });
+                    guardarNotificaciones();
+                    renderizarBandejaNotificaciones();
+                    mostrarToast('Bandeja de notificaciones vaciada con éxito');
+                }
+            });
+
+            // ==================== MÓDULO AUDITORÍA: RECHAZOS AL PROCESO ====================
+            const modalRechazosProceso = document.getElementById('modalRechazosProceso');
+            const rpFiltroDesde = document.getElementById('rpFiltroDesde');
+            const rpFiltroHasta = document.getElementById('rpFiltroHasta');
+            const rpFiltroTurno = document.getElementById('rpFiltroTurno');
+            const rpFiltroProcesoRaiz = document.getElementById('rpFiltroProcesoRaiz');
+            const rpFiltroGestor = document.getElementById('rpFiltroGestor');
+
+            // Abrir y cerrar módulo
+            document.getElementById('btnAbrirRechazosProceso').addEventListener('click', () => {
+                document.getElementById('rpBadgeProcesoActual').textContent = procesoActual.toUpperCase();
+                poblarFiltrosRechazosProceso();
+                setRangoRapidoRechazos('mes');
+                modalRechazosProceso.classList.remove('hidden');
+            });
+            document.getElementById('btnCerrarRechazosProceso').addEventListener('click', () => {
+                modalRechazosProceso.classList.add('hidden');
+            });
+
+            window.setRangoRapidoRechazos = function(tipo) {
+                const now = new Date();
+                const hoy = now.toISOString().split('T')[0];
+
+                if (tipo === 'hoy') {
+                    rpFiltroDesde.value = hoy;
+                    rpFiltroHasta.value = hoy;
+                } else if (tipo === 'mes') {
+                    const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                    rpFiltroDesde.value = primerDiaMes;
+                    rpFiltroHasta.value = hoy;
+                } else if (tipo === 'ano') {
+                    const primerDiaAno = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
+                    rpFiltroDesde.value = primerDiaAno;
+                    rpFiltroHasta.value = hoy;
+                } else if (tipo === 'todo') {
+                    rpFiltroDesde.value = '';
+                    rpFiltroHasta.value = '';
+                }
+                renderizarModuloRechazosProceso();
+            };
+
+            function poblarFiltrosRechazosProceso() {
+                const gestoresSet = new Set();
+                lotesData.forEach(l => {
+                    if (l.gestorTurno) gestoresSet.add(l.gestorTurno);
+                    (l.rechazos || []).forEach(r => { if (r.gestor) gestoresSet.add(r.gestor); });
+                });
+
+                const valG = rpFiltroGestor.value;
+                rpFiltroGestor.innerHTML = '<option value="">Todos los Gestores</option>';
+                Array.from(gestoresSet).sort().forEach(g => {
+                    const opt = document.createElement('option');
+                    opt.value = g;
+                    opt.textContent = g;
+                    if (g === valG) opt.selected = true;
+                    rpFiltroGestor.appendChild(opt);
+                });
+            }
+
+            [rpFiltroDesde, rpFiltroHasta, rpFiltroTurno, rpFiltroProcesoRaiz, rpFiltroGestor].forEach(el => {
+                el.addEventListener('change', renderizarModuloRechazosProceso);
+            });
+
+            // Extrae y consolida todos los rechazos que pertenezcan o hayan sido imputados al proceso
+            function recopilarRechazosProcesoFiltrados() {
+                const fDesde = rpFiltroDesde.value;
+                const fHasta = rpFiltroHasta.value;
+                const fTurno = rpFiltroTurno.value;
+                const fProcRaiz = rpFiltroProcesoRaiz.value;
+                const fGestor = rpFiltroGestor.value;
+
+                let items = [];
+
+                lotesData.forEach(lote => {
+                    const fecha = lote.fechaTurno;
+                    const turno = lote.turno;
+                    const procLote = lote.proceso || 'Corte';
+
+                    // Cumple fechas
+                    if (fDesde && fecha < fDesde) return;
+                    if (fHasta && fecha > fHasta) return;
+                    // Cumple turno
+                    if (fTurno && turno !== fTurno) return;
+
+                    // 1. Rechazos estándar
+                    (lote.rechazos || []).forEach((r, idx) => {
+                        const raiz = r.proceso || 'General';
+                        const gestor = r.gestor || lote.gestorTurno;
+
+                        // Se incluye si el lote es del proceso actual O si la causa raíz imputada es el proceso actual
+                        const aplicaAlProceso = (procLote === procesoActual) || (raiz === procesoActual);
+                        if (!aplicaAlProceso) return;
+
+                        if (fProcRaiz && raiz !== fProcRaiz) return;
+                        if (fGestor && gestor !== fGestor) return;
+
+                        items.push({
+                            id: `rec_${lote.id}_${idx}`,
+                            tipo: "Rechazo Estándar",
+                            fecha: fecha,
+                            turno: turno,
+                            lote: lote.lote,
+                            maquina: lote.cortadora,
+                            referencia: lote.referencia,
+                            procesoReporta: procLote,
+                            procesoRaiz: raiz,
+                            defecto: r.defecto || 'Sin defecto especificado',
+                            trazabilidad: r.trazabilidadRollo || 'S/T',
+                            kilos: parseFloat(r.kilos) || 0,
+                            unidades: parseInt(r.unidades) || 0,
+                            gestor: gestor,
+                            foto: r.fotoBase64 || ''
+                        });
+                    });
+
+                    // 2. Inventario Pallet a Pallet rechazado
+                    if (lote.isExportacion) {
+                        (lote.pallets || []).forEach((p, idx) => {
+                            const v = (p.estado || '').toLowerCase();
+                            const esRech = v.includes('rechaz') || v.includes('segregar') || (parseFloat(p.kgRechazo) > 0);
+                            if (!esRech) return;
+
+                            const raiz = p.procesoRaiz || procLote;
+                            const gestor = lote.gestorTurno;
+
+                            const aplicaAlProceso = (procLote === procesoActual) || (raiz === procesoActual);
+                            if (!aplicaAlProceso) return;
+
+                            if (fProcRaiz && raiz !== fProcRaiz) return;
+                            if (fGestor && gestor !== fGestor) return;
+
+                            items.push({
+                                id: `pal_${lote.id}_${p.id || idx}`,
+                                tipo: `Pallet Rechazado (${p.id})`,
+                                fecha: fecha,
+                                turno: turno,
+                                lote: lote.lote,
+                                maquina: lote.cortadora,
+                                referencia: lote.referencia,
+                                procesoReporta: procLote,
+                                procesoRaiz: raiz,
+                                defecto: p.defecto || p.estado || 'Rechazo Pallet',
+                                trazabilidad: p.trazabilidad || 'S/T',
+                                kilos: parseFloat(p.kgRechazo) || parseFloat(p.kilos) || 0,
+                                unidades: parseInt(p.unidadesSegregar) || 0,
+                                gestor: gestor,
+                                foto: p.fotoBase64 || ''
+                            });
+                        });
+
+                        // 3. Segregación en Línea
+                        (lote.segregacion || []).forEach((s, idx) => {
+                            const raiz = s.procesoRaiz || procLote;
+                            const gestor = lote.gestorTurno;
+
+                            const aplicaAlProceso = (procLote === procesoActual) || (raiz === procesoActual);
+                            if (!aplicaAlProceso) return;
+
+                            if (fProcRaiz && raiz !== fProcRaiz) return;
+                            if (fGestor && gestor !== fGestor) return;
+
+                            items.push({
+                                id: `seg_${lote.id}_${idx}`,
+                                tipo: "Segregación en Línea",
+                                fecha: fecha,
+                                turno: turno,
+                                lote: lote.lote,
+                                maquina: lote.cortadora,
+                                referencia: lote.referencia,
+                                procesoReporta: procLote,
+                                procesoRaiz: raiz,
+                                defecto: s.defecto || 'Segregación en línea',
+                                trazabilidad: s.trazabilidad || 'S/T',
+                                kilos: parseFloat(s.kilos) || 0,
+                                unidades: parseInt(s.unidades) || 0,
+                                gestor: gestor,
+                                foto: s.fotoBase64 || ''
+                            });
+                        });
+                    }
+                });
+
+                // Ordenar por fecha descendente
+                items.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || (b.turno || '').localeCompare(a.turno || ''));
+                return items;
+            }
+
+            function renderizarModuloRechazosProceso() {
+                const items = recopilarRechazosProcesoFiltrados();
+                const tbody = document.getElementById('rpTablaRechazosBody');
+                const emptyState = document.getElementById('rpEmptyState');
+
+                let totalKg = 0;
+                let totalUnds = 0;
+                let totalEventos = items.length;
+                const mapaCausales = {}; // defecto -> kilos
+                const mapaProcesosRaiz = {}; // proceso -> kilos
+
+                items.forEach(it => {
+                    totalKg += it.kilos;
+                    totalUnds += it.unidades;
+
+                    const def = it.defecto || 'Otros';
+                    mapaCausales[def] = (mapaCausales[def] || 0) + it.kilos;
+
+                    const pr = it.procesoRaiz || 'Otros';
+                    mapaProcesosRaiz[pr] = (mapaProcesosRaiz[pr] || 0) + it.kilos;
+                });
+
+                // Actualizar KPIs
+                document.getElementById('rpKpiKilos').textContent = `${totalKg.toFixed(1)} kg`;
+                document.getElementById('rpKpiUnidades').textContent = `${totalUnds.toLocaleString()} unds`;
+                document.getElementById('rpKpiEventos').textContent = totalEventos;
+
+                // Mayor causa raíz
+                let topProceso = 'Sin datos';
+                let topProcesoKg = 0;
+                Object.entries(mapaProcesosRaiz).forEach(([pr, kg]) => {
+                    if (kg > topProcesoKg) {
+                        topProcesoKg = kg;
+                        topProceso = pr;
+                    }
+                });
+                const pctTop = totalKg > 0 ? Math.round((topProcesoKg / totalKg) * 100) : 0;
+                document.getElementById('rpKpiTopProceso').textContent = topProceso;
+                document.getElementById('rpKpiTopProcesoKilos').textContent = `${topProcesoKg.toFixed(1)} kg (${pctTop}%)`;
+
+                // Renderizar Barras de Porcentaje de Causales
+                const contBarras = document.getElementById('rpBarrasCausalesContainer');
+                contBarras.innerHTML = '';
+
+                const causalesOrdenadas = Object.entries(mapaCausales).sort((a, b) => b[1] - a[1]);
+                if (causalesOrdenadas.length === 0) {
+                    contBarras.innerHTML = `<span class="text-slate-400 italic text-[11px]">No hay rechazos registrados en el periodo seleccionado.</span>`;
+                } else {
+                    causalesOrdenadas.forEach(([def, kg]) => {
+                        const pct = totalKg > 0 ? ((kg / totalKg) * 100).toFixed(1) : 0;
+                        const row = document.createElement('div');
+                        row.className = "space-y-1";
+                        row.innerHTML = `
+                            <div class="flex justify-between items-center text-[11px]">
+                                <span class="font-bold text-slate-800">${def}</span>
+                                <span class="font-mono font-bold text-rose-700">${kg.toFixed(1)} kg <span class="text-slate-400 font-normal">(${pct}%)</span></span>
+                            </div>
+                            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                                <div class="bg-gradient-to-r from-rose-500 to-amber-500 h-full rounded-full transition-all" style="width: ${Math.min(pct, 100)}%;"></div>
+                            </div>
+                        `;
+                        contBarras.appendChild(row);
+                    });
+                }
+
+                // Renderizar Tabla
+                tbody.innerHTML = '';
+                if (items.length === 0) {
+                    emptyState.classList.remove('hidden');
+                    return;
+                }
+                emptyState.classList.add('hidden');
+
+                tbody.innerHTML = items.map(it => {
+                    let fotoCol = '<span class="text-slate-300 italic text-[10px]">Sin foto</span>';
+                    if (it.foto) {
+                        fotoCol = `
+                            <img src="${it.foto}" onclick="verFotoModal(this.src)" class="w-8 h-8 object-cover rounded-lg border border-slate-300 mx-auto cursor-pointer shadow-sm hover:opacity-90" title="Ver foto del rechazo">
+                        `;
+                    }
+
+                    return `
+                        <tr class="hover:bg-rose-50/40 transition-all">
+                            <td class="py-2 px-3 align-top">
+                                <span class="font-bold text-slate-900 block">${it.fecha}</span>
+                                <span class="text-[10px] text-slate-500 font-semibold">${it.turno}</span>
+                            </td>
+                            <td class="py-2 px-3 align-top">
+                                <span class="font-extrabold text-slate-900 block">OT: ${it.lote}</span>
+                                <span class="text-[10px] text-sky-700 font-semibold">${it.maquina}</span>
+                            </td>
+                            <td class="py-2 px-3 align-top">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 inline-block mb-0.5">${it.procesoRaiz}</span>
+                                <span class="block text-[10px] text-slate-500">Reportó: <strong>${it.procesoReporta}</strong></span>
+                            </td>
+                            <td class="py-2 px-3 align-top">
+                                <strong class="text-slate-800 block">${it.defecto}</strong>
+                                <span class="text-[10px] text-sky-800">Trazabilidad: <strong>${it.trazabilidad}</strong></span>
+                            </td>
+                            <td class="py-2 px-3 text-right align-top">
+                                <span class="font-extrabold text-rose-700 block">${it.kilos.toFixed(1)} kg</span>
+                                <span class="text-[10px] text-slate-500">${it.unidades} unds</span>
+                            </td>
+                            <td class="py-2 px-3 align-top font-semibold text-slate-700">
+                                ${it.gestor}
+                            </td>
+                            <td class="py-2 px-3 text-center align-top">
+                                ${fotoCol}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            // Exportar Excel del Módulo de Rechazos
+            document.getElementById('btnExportarExcelRechazosModulo').addEventListener('click', () => {
+                const items = recopilarRechazosProcesoFiltrados();
+                if (items.length === 0) {
+                    mostrarToast('No hay rechazos para exportar con los filtros actuales', true);
+                    return;
+                }
+
+                const rowsExcel = items.map(it => ({
+                    "Fecha": it.fecha,
+                    "Turno": it.turno,
+                    "OT / Lote": it.lote,
+                    "Máquina": it.maquina,
+                    "Referencia": it.referencia,
+                    "Tipo de Novedad": it.tipo,
+                    "Proceso que Reporta": it.procesoReporta,
+                    "Proceso Causa Raíz (Imputado)": it.procesoRaiz,
+                    "Defecto / Causal": it.defecto,
+                    "Trazabilidad / Rango": it.trazabilidad,
+                    "Kilos Rechazados (Kg)": it.kilos,
+                    "Unidades Afectadas": it.unidades,
+                    "Gestor que Reportó": it.gestor,
+                    "¿Tiene Foto?": it.foto ? "SÍ" : "NO"
+                }));
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rowsExcel), "Rechazos_Proceso");
+                XLSX.writeFile(wb, `Litoplas_Rechazos_${procesoActual}_${hoyISO}.xlsx`);
+                mostrarToast('Reporte de Rechazos exportado a Excel con éxito');
             });
 
             const toast = document.getElementById('toast');
