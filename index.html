@@ -4587,8 +4587,15 @@ if __name__ == "__main__":
                     });
                     const res = await response.json();
                     if (res && res.record) {
+                        let huboCambios = false;
                         if (Array.isArray(res.record.lotes)) {
-                            lotesData = res.record.lotes;
+                            const idsLocales = new Set(lotesData.map(l => l.id));
+                            res.record.lotes.forEach(loteNube => {
+                                if (!idsLocales.has(loteNube.id)) {
+                                    lotesData.unshift(loteNube);
+                                    huboCambios = true;
+                                }
+                            });
                         }
                         if (Array.isArray(res.record.turnoMetros)) {
                             turnoMetrosData = res.record.turnoMetros;
@@ -4596,9 +4603,11 @@ if __name__ == "__main__":
                         if (Array.isArray(res.record.notificaciones)) {
                             notificacionesData = res.record.notificaciones;
                         }
-                        actualizarUI();
-                        if (mostrarToastAviso) {
-                            mostrarToast('Sincronizado con la nube');
+                        if (huboCambios) {
+                            actualizarUI();
+                            if (mostrarToastAviso) {
+                                mostrarToast('Nuevos datos sincronizados');
+                            }
                         }
                     }
                 } catch (err) {
@@ -4608,6 +4617,22 @@ if __name__ == "__main__":
 
             async function subirDatosANube() {
                 try {
+                    const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                        headers: { 'X-Master-Key': API_KEY },
+                        cache: 'no-store'
+                    });
+                    const res = await response.json();
+                    let lotesFinales = [...lotesData];
+
+                    if (res && res.record && Array.isArray(res.record.lotes)) {
+                        const idsActuales = new Set(lotesFinales.map(l => l.id));
+                        res.record.lotes.forEach(loteNube => {
+                            if (!idsActuales.has(loteNube.id)) {
+                                lotesFinales.push(loteNube);
+                            }
+                        });
+                    }
+
                     await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                         method: 'PUT',
                         headers: {
@@ -4615,7 +4640,7 @@ if __name__ == "__main__":
                             'X-Master-Key': API_KEY
                         },
                         body: JSON.stringify({
-                            lotes: lotesData,
+                            lotes: lotesFinales,
                             turnoMetros: turnoMetrosData,
                             notificaciones: notificacionesData
                         })
