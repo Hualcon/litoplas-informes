@@ -1182,8 +1182,8 @@
 
 
     <!-- ==================== MODAL INDICADORES Y RECHAZOS AL PROCESO ==================== -->
-    <div id="modalRechazosProceso" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-3 sm:p-4">
-        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden fade-in text-xs flex flex-col max-h-[90vh]">
+    <div id="modalRechazosProceso" class="fixed inset-0 z-50 flex items-start justify-center bg-slate-950/80 backdrop-blur-sm hidden p-3 sm:p-6 overflow-y-auto">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl overflow-hidden fade-in text-xs flex flex-col max-h-[92vh] my-auto">
             <div class="bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 px-6 py-4 flex justify-between items-center text-white border-b border-rose-900/40 flex-shrink-0">
                 <div class="flex items-center space-x-3">
                     <div class="bg-rose-500/20 text-rose-400 p-2 rounded-xl border border-rose-500/30">
@@ -1297,28 +1297,31 @@
                     <div id="rpBarrasCausalesContainer" class="space-y-2 max-h-48 overflow-y-auto pr-1"></div>
                 </div>
 
-                <!-- Tabla de Rechazos Detallados -->
-                <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-                    <div class="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-                        <span class="font-extrabold uppercase text-slate-700 text-xs">
-                            <i class="fa-solid fa-list-check text-sky-600 mr-1"></i> Detalle de Rechazos Registrados
-                        </span>
-                        <button type="button" id="btnExportarExcelRechazosModulo" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded-xl text-xs font-bold flex items-center space-x-1 shadow-sm">
-                            <i class="fa-solid fa-file-excel"></i>
+                <!-- Tabla de Rechazos Detallados con Scroll Natural y Encabezado Fijo -->
+                <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm flex flex-col">
+                    <div class="p-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center flex-shrink-0">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-extrabold uppercase text-slate-700 text-xs">
+                                <i class="fa-solid fa-list-check text-sky-600 mr-1"></i> Detalle de Rechazos Registrados
+                            </span>
+                            <span id="rpConteoRegistrosBadge" class="text-[10px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full border border-rose-200">0 registros</span>
+                        </div>
+                        <button type="button" id="btnExportarExcelRechazosModulo" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all">
+                            <i class="fa-solid fa-file-excel text-emerald-200"></i>
                             <span>Exportar Rechazos</span>
                         </button>
                     </div>
-                    <div class="overflow-x-auto max-h-64">
+                    <div class="overflow-x-auto overflow-y-auto max-h-96 border-b border-slate-100" style="scrollbar-gutter: stable;">
                         <table class="w-full text-left border-collapse text-xs">
-                            <thead class="bg-slate-100/90 text-slate-600 font-bold uppercase tracking-wider border-b border-slate-200 text-[10px] sticky top-0">
+                            <thead class="bg-slate-100 text-slate-700 font-extrabold uppercase tracking-wider border-b border-slate-300 text-[10px] sticky top-0 z-10 shadow-sm">
                                 <tr>
-                                    <th class="py-2.5 px-3">Fecha / Turno</th>
-                                    <th class="py-2.5 px-3">OT / Máquina</th>
-                                    <th class="py-2.5 px-3">Tipo / Origen Causa Raíz</th>
-                                    <th class="py-2.5 px-3">Defecto / Trazabilidad</th>
-                                    <th class="py-2.5 px-3 text-right">Kilos / Unds</th>
-                                    <th class="py-2.5 px-3">Gestor que Reportó</th>
-                                    <th class="py-2.5 px-3 text-center">Foto</th>
+                                    <th class="py-2 px-3 bg-slate-100">Fecha / Turno</th>
+                                    <th class="py-2 px-3 bg-slate-100">OT / Máquina</th>
+                                    <th class="py-2 px-3 bg-slate-100">Tipo / Proceso Raíz</th>
+                                    <th class="py-2 px-3 bg-slate-100">Defecto / Trazabilidad</th>
+                                    <th class="py-2 px-3 text-right bg-slate-100">Kilos / Unds</th>
+                                    <th class="py-2 px-3 bg-slate-100">Gestor</th>
+                                    <th class="py-2 px-3 text-center bg-slate-100">Evidencia</th>
                                 </tr>
                             </thead>
                             <tbody id="rpTablaRechazosBody" class="divide-y divide-slate-100 text-slate-700"></tbody>
@@ -2329,40 +2332,45 @@
                 }
                 emptyState.classList.add('hidden');
 
+                const badgeConteo = document.getElementById('rpConteoRegistrosBadge');
+                if (badgeConteo) badgeConteo.textContent = `${items.length} ${items.length === 1 ? 'registro' : 'registros'}`;
+
                 tbody.innerHTML = items.map(it => {
                     let fotoCol = '<span class="text-slate-300 italic text-[10px]">Sin foto</span>';
                     if (it.foto) {
                         fotoCol = `
-                            <img src="${it.foto}" onclick="verFotoModal(this.src)" class="w-8 h-8 object-cover rounded-lg border border-slate-300 mx-auto cursor-pointer shadow-sm hover:opacity-90" title="Ver foto del rechazo">
+                            <div class="flex items-center justify-center space-x-1">
+                                <img src="${it.foto}" onclick="verFotoModal(this.src)" class="w-10 h-10 object-cover rounded-lg border border-slate-300 cursor-pointer shadow-sm hover:opacity-90 hover:scale-105 transition-all" title="Clic para ampliar foto">
+                            </div>
                         `;
                     }
 
                     return `
-                        <tr class="hover:bg-rose-50/40 transition-all">
-                            <td class="py-2 px-3 align-top">
+                        <tr class="hover:bg-rose-50/50 transition-colors border-b border-slate-100">
+                            <td class="py-1.5 px-3 align-middle whitespace-nowrap">
                                 <span class="font-bold text-slate-900 block">${it.fecha}</span>
                                 <span class="text-[10px] text-slate-500 font-semibold">${it.turno}</span>
                             </td>
-                            <td class="py-2 px-3 align-top">
-                                <span class="font-extrabold text-slate-900 block">OT: ${it.lote}</span>
-                                <span class="text-[10px] text-sky-700 font-semibold">${it.maquina}</span>
+                            <td class="py-1.5 px-3 align-middle">
+                                <span class="font-extrabold text-slate-900 block">${it.lote}</span>
+                                <span class="text-[10px] text-sky-700 font-semibold block">${it.maquina}</span>
                             </td>
-                            <td class="py-2 px-3 align-top">
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 inline-block mb-0.5">${it.procesoRaiz}</span>
-                                <span class="block text-[10px] text-slate-500">Reportó: <strong>${it.procesoReporta}</strong></span>
+                            <td class="py-1.5 px-3 align-middle">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 inline-block">${it.procesoRaiz}</span>
+                                <span class="block text-[10px] text-slate-400 mt-0.5">En: ${it.procesoReporta}</span>
                             </td>
-                            <td class="py-2 px-3 align-top">
-                                <strong class="text-slate-800 block">${it.defecto}</strong>
-                                <span class="text-[10px] text-sky-800">Trazabilidad: <strong>${it.trazabilidad}</strong></span>
+                            <td class="py-1.5 px-3 align-middle">
+                                <strong class="text-slate-800 block text-xs">${it.defecto}</strong>
+                                <span class="text-[10px] text-slate-500 font-medium">Trazab: ${it.trazabilidad}</span>
                             </td>
-                            <td class="py-2 px-3 text-right align-top">
-                                <span class="font-extrabold text-rose-700 block">${it.kilos.toFixed(1)} kg</span>
-                                <span class="text-[10px] text-slate-500">${it.unidades} unds</span>
+                            <td class="py-1.5 px-3 text-right align-middle whitespace-nowrap">
+                                <span class="font-black text-rose-700 text-xs block">${it.kilos.toFixed(1)} kg</span>
+                                <span class="text-[10px] text-slate-500 font-medium">${it.unidades} unds</span>
                             </td>
-                            <td class="py-2 px-3 align-top font-semibold text-slate-700">
+                            <td class="py-1.5 px-3 align-middle whitespace-nowrap text-slate-700 font-semibold">
                                 ${it.gestor}
                             </td>
-                            <td class="py-2 px-3 text-center align-top">
+                            <td class="py-1.5 px-3 text-center align-middle">
                                 ${fotoCol}
                             </td>
                         </tr>
