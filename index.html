@@ -4613,13 +4613,11 @@ if __name__ == "__main__":
                         }
 
                         if (Array.isArray(res.record.lotes)) {
-                            const idsLocales = new Set(lotesData.map(l => l.id));
-                            res.record.lotes.forEach(loteNube => {
-                                if (!idsLocales.has(loteNube.id)) {
-                                    lotesData.unshift(loteNube);
-                                    huboCambios = true;
-                                }
-                            });
+                            // La nube es la fuente de verdad: si se eliminó en la nube, se elimina en local
+                            if (JSON.stringify(lotesData) !== JSON.stringify(res.record.lotes)) {
+                                lotesData = res.record.lotes;
+                                huboCambios = true;
+                            }
                         }
 
                         if (Array.isArray(res.record.turnoMetros)) {
