@@ -1582,6 +1582,46 @@
             }
 
             // Generador universal de notificaciones (Creación y Edición / Pallets y Segregación)
+            function obtenerFotoEspecificaNotificacion(n) {
+                if (n.foto) return n.foto;
+                const loteAsoc = lotesData.find(l => l.id === n.loteId || (l.lote === n.lote && (l.proceso || 'Corte') === n.proceso));
+                if (!loteAsoc) return '';
+
+                if (n.itemTipo === 'rechazo' || n.tipoNovedad === 'Rechazo') {
+                    const list = loteAsoc.rechazos || [];
+                    if (typeof n.itemIdx === 'number' && list[n.itemIdx] && list[n.itemIdx].fotoBase64) {
+                        return list[n.itemIdx].fotoBase64;
+                    }
+                    const match = list.find(r => (r.defecto === n.itemDefecto || r.trazabilidadRollo === n.itemTraz) && r.fotoBase64);
+                    if (match) return match.fotoBase64;
+                } else if (n.itemTipo === 'retencion' || n.tipoNovedad === 'Retención') {
+                    const list = loteAsoc.retenciones || [];
+                    if (typeof n.itemIdx === 'number' && list[n.itemIdx] && list[n.itemIdx].fotoBase64) {
+                        return list[n.itemIdx].fotoBase64;
+                    }
+                    const match = list.find(r => (r.defecto === n.itemDefecto || r.trazabilidadRollo === n.itemTraz) && r.fotoBase64);
+                    if (match) return match.fotoBase64;
+                } else if (n.itemTipo === 'pallet' || n.tipoNovedad === 'Inventario Pallet') {
+                    const list = loteAsoc.pallets || [];
+                    if (n.palletId) {
+                        const pMatch = list.find(p => p.id === n.palletId && p.fotoBase64);
+                        if (pMatch) return pMatch.fotoBase64;
+                    }
+                    if (typeof n.itemIdx === 'number' && list[n.itemIdx] && list[n.itemIdx].fotoBase64) {
+                        return list[n.itemIdx].fotoBase64;
+                    }
+                } else if (n.itemTipo === 'segregacion' || n.tipoNovedad === 'Segregación en Línea') {
+                    const list = loteAsoc.segregacion || [];
+                    if (typeof n.itemIdx === 'number' && list[n.itemIdx] && list[n.itemIdx].fotoBase64) {
+                        return list[n.itemIdx].fotoBase64;
+                    }
+                    const match = list.find(s => (s.defecto === n.itemDefecto || s.trazabilidad === n.itemTraz) && s.fotoBase64);
+                    if (match) return match.fotoBase64;
+                }
+                return '';
+            }
+
+            // Generador universal de notificaciones con asignación precisa de fotos por ítem
             function generarNotificacionNovedadesLote(loteItem, esEdicion = false) {
                 const proc = loteItem.proceso || "Corte";
                 const gestoresProc = gestoresPorProceso[proc] || [];
@@ -1593,7 +1633,11 @@
                 if (loteItem.rechazos && loteItem.rechazos.length > 0) {
                     loteItem.rechazos.forEach((r, idx) => {
                         novedadesItems.push({
-                            key: `rec_${loteItem.id}_${r.trazabilidadRollo || idx}_${r.defecto}`,
+                            key: `rec_${loteItem.id}_${idx}`,
+                            itemTipo: 'rechazo',
+                            itemIdx: idx,
+                            itemTraz: r.trazabilidadRollo || '',
+                            itemDefecto: r.defecto || '',
                             tipo: "Rechazo",
                             detalle: `Rechazo en ${r.proceso} (${r.trazabilidadRollo || 'S/T'}): ${r.kilos}kg / ${r.unidades}u - Defecto: ${r.defecto}`,
                             foto: r.fotoBase64 || ""
@@ -1604,7 +1648,11 @@
                 if (loteItem.retenciones && loteItem.retenciones.length > 0) {
                     loteItem.retenciones.forEach((r, idx) => {
                         novedadesItems.push({
-                            key: `ret_${loteItem.id}_${r.trazabilidadRollo || idx}_${r.defecto}`,
+                            key: `ret_${loteItem.id}_${idx}`,
+                            itemTipo: 'retencion',
+                            itemIdx: idx,
+                            itemTraz: r.trazabilidadRollo || '',
+                            itemDefecto: r.defecto || '',
                             tipo: "Retención",
                             detalle: `Retención en ${r.proceso} (${r.trazabilidadRollo || 'S/T'}): ${r.kilos}kg / ${r.unidades}u - Defecto: ${r.defecto}`,
                             foto: r.fotoBase64 || ""
@@ -1614,13 +1662,18 @@
 
                 if (loteItem.isExportacion) {
                     if (loteItem.pallets && loteItem.pallets.length > 0) {
-                        loteItem.pallets.forEach(p => {
+                        loteItem.pallets.forEach((p, idx) => {
                             const v = (p.estado || '').toLowerCase();
                             const tieneRechazo = v.includes('rechaz') || v.includes('segregar') || (parseFloat(p.kgRechazo) > 0);
                             const tieneFoto = !!p.fotoBase64;
                             if (tieneRechazo || tieneFoto) {
                                 novedadesItems.push({
-                                    key: `pal_${loteItem.id}_${p.id}`,
+                                    key: `pal_${loteItem.id}_${p.id || idx}`,
+                                    itemTipo: 'pallet',
+                                    itemIdx: idx,
+                                    palletId: p.id || '',
+                                    itemTraz: p.trazabilidad || '',
+                                    itemDefecto: p.defecto || '',
                                     tipo: "Inventario Pallet",
                                     detalle: `Pallet ${p.id} (${p.kilos || 0}kg): ${p.kgRechazo || 0}kg / ${p.unidadesSegregar || 0}u - Raíz: ${p.procesoRaiz || 'N/A'} (${p.defecto || p.estado})`,
                                     foto: p.fotoBase64 || ""
@@ -1632,7 +1685,11 @@
                     if (loteItem.segregacion && loteItem.segregacion.length > 0) {
                         loteItem.segregacion.forEach((s, idx) => {
                             novedadesItems.push({
-                                key: `seg_${loteItem.id}_${idx}_${s.trazabilidad || ''}`,
+                                key: `seg_${loteItem.id}_${idx}`,
+                                itemTipo: 'segregacion',
+                                itemIdx: idx,
+                                itemTraz: s.trazabilidad || '',
+                                itemDefecto: s.defecto || '',
                                 tipo: "Segregación en Línea",
                                 detalle: `Segregado en línea (${s.kilos || 0}kg / ${s.unidades || 0}u) - Raíz: ${s.procesoRaiz || 'N/A'} (${s.defecto || 'Novedad'})`,
                                 foto: s.fotoBase64 || ""
@@ -1649,6 +1706,11 @@
                             id: 'NOTIF-' + Date.now() + '-' + Math.floor(Math.random()*1000),
                             novedadKey: nov.key,
                             loteId: loteItem.id,
+                            itemTipo: nov.itemTipo,
+                            itemIdx: nov.itemIdx,
+                            palletId: nov.palletId || '',
+                            itemTraz: nov.itemTraz || '',
+                            itemDefecto: nov.itemDefecto || '',
                             proceso: proc,
                             lote: loteItem.lote,
                             referencia: loteItem.referencia,
@@ -1665,11 +1727,14 @@
                             timestamp: new Date().toLocaleString()
                         });
                         hubonuevas = true;
-                    } else if (!existente.tieneFoto && nov.foto) {
-                        existente.tieneFoto = true;
-                        existente.leidaPor = {};
-                        existente.leida = false;
-                        hubonuevas = true;
+                    } else {
+                        // Si ya existía, actualizar si se añadió foto al ítem específico
+                        if (!existente.tieneFoto && nov.foto) {
+                            existente.tieneFoto = true;
+                            existente.leidaPor = {};
+                            existente.leida = false;
+                            hubonuevas = true;
+                        }
                     }
                 });
 
@@ -1708,7 +1773,7 @@
                 mostrarToast('Todas las notificaciones marcadas como leídas');
             });
 
-            // Renderizado de tarjetas interactivas clicables
+            // Renderizado de tarjetas interactivas clicables con detección precisa de foto
             function renderizarBandejaNotificaciones() {
                 const cont = document.getElementById('listaBandejaNotifContainer');
                 const emptyMsg = document.getElementById('emptyNotifMsg');
@@ -1737,19 +1802,8 @@
                                      : n.tipoNovedad === 'Retención' ? 'bg-amber-100 text-amber-900 border-amber-300'
                                      : 'bg-purple-100 text-purple-900 border-purple-300';
 
-                    // Determinar si tiene foto (directa o referenciada en el lote)
-                    let fotoDisponible = !!n.foto || !!n.tieneFoto;
-                    if (!fotoDisponible) {
-                        const loteAsoc = lotesData.find(l => l.id === n.loteId || (l.lote === n.lote && (l.proceso || 'Corte') === n.proceso));
-                        if (loteAsoc) {
-                            if (n.tipoNovedad === 'Rechazo') fotoDisponible = (loteAsoc.rechazos || []).some(x => x.fotoBase64);
-                            else if (n.tipoNovedad === 'Retención') fotoDisponible = (loteAsoc.retenciones || []).some(x => x.fotoBase64);
-                            else if (loteAsoc.isExportacion) {
-                                fotoDisponible = (loteAsoc.pallets || []).some(x => x.fotoBase64) || (loteAsoc.segregacion || []).some(x => x.fotoBase64);
-                            }
-                        }
-                    }
-                    const iconFoto = fotoDisponible ? '<span class="text-sky-600 font-bold ml-1"><i class="fa-solid fa-camera mr-0.5"></i>Con Foto</span>' : '';
+                    const fotoExacta = obtenerFotoEspecificaNotificacion(n);
+                    const iconFoto = fotoExacta ? '<span class="text-sky-600 font-bold ml-1"><i class="fa-solid fa-camera mr-0.5"></i>Con Foto</span>' : '';
 
                     return `
                         <div onclick="abrirDetalleNotificacion('${n.id}')" class="cursor-pointer p-3.5 rounded-2xl border transition-all hover:border-sky-400 hover:shadow-md ${estaLeida ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-sky-50/50 border-sky-300 shadow-sm'} space-y-1.5 relative">
@@ -1771,7 +1825,7 @@
                 }).join('');
             }
 
-            // Ventana modal de detalle interactivo
+            // Ventana modal de detalle interactivo con foto exacta aislada
             let notificacionActivaId = null;
             window.abrirDetalleNotificacion = function(id) {
                 const n = notificacionesData.find(x => x.id === id);
@@ -1794,28 +1848,10 @@
                 document.getElementById('dnMensaje').textContent = n.mensaje;
                 document.getElementById('dnTimestamp').textContent = `Reportado: ${n.timestamp}`;
 
-                let fotoSrc = n.foto || '';
-                if (!fotoSrc) {
-                    const loteAsoc = lotesData.find(l => l.id === n.loteId || (l.lote === n.lote && (l.proceso || 'Corte') === n.proceso));
-                    if (loteAsoc) {
-                        if (n.tipoNovedad === 'Rechazo' && loteAsoc.rechazos) {
-                            const r = loteAsoc.rechazos.find(x => x.fotoBase64);
-                            if (r) fotoSrc = r.fotoBase64;
-                        } else if (n.tipoNovedad === 'Retención' && loteAsoc.retenciones) {
-                            const ret = loteAsoc.retenciones.find(x => x.fotoBase64);
-                            if (ret) fotoSrc = ret.fotoBase64;
-                        } else if (loteAsoc.isExportacion) {
-                            const p = (loteAsoc.pallets || []).find(x => x.fotoBase64);
-                            const s = (loteAsoc.segregacion || []).find(x => x.fotoBase64);
-                            if (p) fotoSrc = p.fotoBase64;
-                            else if (s) fotoSrc = s.fotoBase64;
-                        }
-                    }
-                }
-
+                const fotoExacta = obtenerFotoEspecificaNotificacion(n);
                 const fotoBox = document.getElementById('dnFotoContainer');
-                if (fotoSrc) {
-                    document.getElementById('dnFotoImg').src = fotoSrc;
+                if (fotoExacta) {
+                    document.getElementById('dnFotoImg').src = fotoExacta;
                     fotoBox.classList.remove('hidden');
                 } else {
                     fotoBox.classList.add('hidden');
