@@ -1755,7 +1755,7 @@
                 document.getElementById('headerUserCedula').textContent = user.cedula;
 
                 const rolTexto = user.modo === 'admin' ? 'Administrador Total'
-                               : user.modo === 'solo_lectura' ? 'Solo Filtrar y Ver Reportes (Lectura)'
+                               : user.modo === 'solo_lectura' ? 'Solo Lectura y Filtros'
                                : 'Gestor Operativo';
                 document.getElementById('headerUserRol').textContent = rolTexto;
 
@@ -3048,4 +3048,1628 @@
 
                 lista.forEach(r => {
                     const row = document.createElement('div');
-                    row.className = "ret-row bg-amber-5
+                    row.className = "ret-row bg-amber-50/40 p-3 rounded-xl border border-amber-200 relative space-y-2";
+                    const listaCausalesRet = formConfig.causalesRetencion || formConfig.causalesRechazo || [];
+                    const optsCausales = listaCausalesRet.map(c => `<option value="${c}" ${r.proceso === c ? 'selected' : ''}>${c}</option>`).join('');
+
+                    let extraInputsHTML = '';
+                    if (formConfig.extraFieldsRetencion && formConfig.extraFieldsRetencion.length > 0) {
+                        extraInputsHTML = `<div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-amber-200">` +
+                            formConfig.extraFieldsRetencion.map(ef => `
+                                <div>
+                                    <label class="block text-[10px] font-bold text-amber-800 uppercase">${ef}</label>
+                                    <input type="text" data-ret-extra="${ef}" value="${(r.extras && r.extras[ef]) || ''}" class="w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs">
+                                </div>
+                            `).join('') + `</div>`;
+                    }
+
+                    row.innerHTML = `
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-semibold text-slate-400 uppercase">Proceso Origen</label>
+                                <select class="ret-proceso w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs">${optsCausales}</select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-slate-400 uppercase">Trazabilidad Rollo</label>
+                                <input type="text" value="${r.trazabilidadRollo || ''}" placeholder="Ej. R-4029" class="ret-trazabilidad w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-slate-400 uppercase">Unidades</label>
+                                <input type="number" min="0" value="${r.unidades !== undefined ? r.unidades : 0}" class="ret-unds w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-slate-400 uppercase">Kilos (kg)</label>
+                                <input type="number" step="0.1" min="0" value="${r.kilos !== undefined ? r.kilos : 0}" class="ret-kilos w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] font-semibold text-slate-400 uppercase">Socialización Gestor</label>
+                                <input type="text" value="${r.gestor || ''}" class="ret-gestor w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-semibold text-slate-400 uppercase">Defecto</label>
+                                <input type="text" value="${r.defecto || ''}" class="ret-defecto w-full px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs">
+                            </div>
+                        </div>
+                        <div class="foto-adjunto-container bg-white p-2 rounded-lg border border-slate-200 flex items-center justify-between gap-2">
+                            <div class="flex items-center space-x-2">
+                                <label class="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded-lg font-bold text-[10px] border border-slate-300 flex items-center space-x-1 shadow-sm">
+                                    <i class="fa-solid fa-camera text-amber-600"></i>
+                                    <span class="foto-btn-text">${r.fotoBase64 ? 'Cambiar Foto' : 'Adjuntar Foto'}</span>
+                                    <input type="file" accept="image/*" onchange="capturarFotoFila(this)" class="hidden">
+                                </label>
+                                <input type="hidden" class="foto-val" value="${r.fotoBase64 || ''}">
+                                <div class="foto-preview-wrap ${r.fotoBase64 ? '' : 'hidden'} flex items-center space-x-1">
+                                    <img src="${r.fotoBase64 || ''}" onclick="verFotoModal(this.src)" class="foto-thumb w-8 h-8 object-cover rounded border border-slate-300 cursor-pointer" title="Ver foto ampliada">
+                                    <button type="button" onclick="quitarFotoFila(this)" class="text-rose-500 hover:text-rose-700 text-[10px] p-1" title="Quitar foto"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                            <span class="text-[9px] text-slate-400 italic">Evidencia fotográfica de retención</span>
+                        </div>
+                        ${extraInputsHTML}
+                        <button type="button" onclick="this.closest('.ret-row').remove()" class="absolute -top-2 -right-2 bg-rose-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shadow">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    `;
+                    retencionesContainer.appendChild(row);
+                });
+            }
+
+            function getRetsFromModal() {
+                const rows = retencionesContainer.querySelectorAll('.ret-row');
+                let arr = [];
+                rows.forEach(r => {
+                    let extras = {};
+                    r.querySelectorAll('[data-ret-extra]').forEach(inp => {
+                        extras[inp.getAttribute('data-ret-extra')] = inp.value.trim();
+                    });
+                    const fotoVal = r.querySelector('.foto-val') ? r.querySelector('.foto-val').value : '';
+                    arr.push({
+                        proceso: r.querySelector('.ret-proceso').value,
+                        trazabilidadRollo: r.querySelector('.ret-trazabilidad').value.trim(),
+                        unidades: parseInt(r.querySelector('.ret-unds').value) || 0,
+                        kilos: parseFloat(r.querySelector('.ret-kilos').value) || 0,
+                        gestor: r.querySelector('.ret-gestor').value.trim(),
+                        defecto: r.querySelector('.ret-defecto').value.trim(),
+                        fotoBase64: fotoVal,
+                        extras
+                    });
+                });
+                return arr;
+            }
+
+            document.getElementById('btnAddRetencion').addEventListener('click', () => {
+                const list = getRetsFromModal();
+                const listaCausalesRet = formConfig.causalesRetencion || formConfig.causalesRechazo || [];
+                list.push({ proceso: listaCausalesRet[0] || "Corte", trazabilidadRollo: "", unidades: 0, kilos: 0.0, gestor: "", defecto: "", extras: {} });
+                renderRetencionesModal(list);
+            });
+
+            document.getElementById('btnNuevoLote').addEventListener('click', () => {
+                formProduccion.reset();
+                document.getElementById('editId').value = "";
+                document.getElementById('modalTitulo').textContent = `Registrar Lote / OT • Proceso de ${procesoActual}`;
+                document.getElementById('fechaTurno').value = filtroFechaDesde.value || hoyISO;
+
+                const inputGestor = document.getElementById('modalGestorTurno');
+                if (inputGestor) {
+                    inputGestor.value = usuarioActual ? usuarioActual.nombre : '';
+                }
+
+                wrapperJustificacionVelocidad.classList.add('hidden');
+                wrapperJustificacionCaja.classList.add('hidden');
+                isExportacionCb.checked = false;
+                bloqueExportacion.classList.add('hidden');
+                renderPalletsModal([]);
+                renderSegregacionModal([]);
+                prepararCamposModalPorProceso({});
+                renderNovedadesModal([]);
+                renderRechazosModal([]);
+                renderRetencionesModal([]);
+                modalLote.classList.remove('hidden');
+            });
+
+            document.getElementById('btnCerrarModal').addEventListener('click', () => modalLote.classList.add('hidden'));
+            document.getElementById('btnCancelarModal').addEventListener('click', () => modalLote.classList.add('hidden'));
+
+            formProduccion.addEventListener('submit', (e) => {
+                e.preventDefault();
+
+                const std = parseFloat(velEstandarInput.value) || 0;
+                const real = parseFloat(velRealInput.value) || 0;
+                if (real < std && !justificacionVelocidadInput.value.trim()) {
+                    mostrarToast('Debes justificar por qué se trabajó por debajo de la velocidad estándar', true);
+                    return;
+                }
+                if (estadoCajaSelect.value === 'Faltante' && !justificacionFaltanteInput.value.trim()) {
+                    mostrarToast('Debes ingresar la justificación del faltante de caja', true);
+                    return;
+                }
+
+                let customValues = {};
+                document.querySelectorAll('[data-custom-field]').forEach(inp => {
+                    customValues[inp.getAttribute('data-custom-field')] = inp.value.trim();
+                });
+
+                const idExistente = document.getElementById('editId').value;
+                const registroExistente = idExistente ? lotesData.find(x => x.id === idExistente) : null;
+
+                if (registroExistente &&
+                    registroExistente.creadoPorCedula !== usuarioActual.cedula &&
+                    registroExistente.gestorTurno !== usuarioActual.nombre) {
+                    mostrarToast('No tienes permiso para modificar un lote registrado por otro gestor', true);
+                    return;
+                }
+
+                const expActivo = isExportacionCb.checked;
+
+                const nuevo = {
+                    id: idExistente || ('L-' + Date.now()),
+                    proceso: procesoActual,
+                    lote: document.getElementById('lote').value.trim(),
+                    cortadora: document.getElementById('cortadora').value,
+                    referencia: document.getElementById('referencia').value.trim(),
+                    operario: document.getElementById('operario').value.trim(),
+                    gestorTurno: registroExistente ? registroExistente.gestorTurno : (usuarioActual ? usuarioActual.nombre : document.getElementById('modalGestorTurno').value),
+                    creadoPorCedula: registroExistente ? registroExistente.creadoPorCedula : (usuarioActual ? usuarioActual.cedula : '1192816779'),
+                    turno: document.getElementById('turno').value,
+                    fechaTurno: document.getElementById('fechaTurno').value || hoyISO,
+                    velEstandar: std,
+                    velReal: real,
+                    unidadVelocidad: obtenerUnidadVelocidadActual(procesoActual),
+                    justificacionVelocidad: real < std ? justificacionVelocidadInput.value.trim() : '',
+                    kgProducidos: parseFloat(document.getElementById('kgProducidos').value) || 0,
+                    kgDesperdicioLiquidado: parseFloat(document.getElementById('kgDesperdicioLiquidado').value) || 0,
+                    cambioCuchilla: document.getElementById('cambioCuchilla').value,
+                    afectoRolloSemiterminado: document.getElementById('afectoRolloSemiterminado').value,
+                    observacionesCuchillas: document.getElementById('observacionesCuchillas').value.trim(),
+                    estadoLote: document.getElementById('estadoLote').value,
+                    estadoCaja: estadoCajaSelect.value,
+                    justificacionFaltante: estadoCajaSelect.value === 'Faltante' ? justificacionFaltanteInput.value.trim() : '',
+                    observaciones: document.getElementById('observaciones').value.trim(),
+                    novedades: getNovsFromModal(),
+                    rechazos: getRecsFromModal(),
+                    retenciones: getRetsFromModal(),
+                    isExportacion: expActivo,
+                    pallets: expActivo ? getPalletsFromModal() : [],
+                    segregacion: expActivo ? getSegregacionFromModal() : [],
+                    customValues
+                };
+
+                if (idExistente) {
+                    const idx = lotesData.findIndex(x => x.id === idExistente);
+                    if (idx !== -1) lotesData[idx] = nuevo;
+                    mostrarToast('Lote/OT actualizado correctamente');
+                } else {
+                    lotesData.unshift(nuevo);
+                    generarNotificacionNovedadesLote(nuevo);
+                    mostrarToast('Lote/OT registrado • Notificaciones enviadas al proceso');
+                }
+
+                modalLote.classList.add('hidden');
+                actualizarUI();
+            });
+
+            window.editarLote = function(id) {
+                const item = lotesData.find(x => x.id === id);
+                if (!item) return;
+
+                if (!usuarioActual || (item.creadoPorCedula !== usuarioActual.cedula && item.gestorTurno !== usuarioActual.nombre)) {
+                    mostrarToast('Restricción: Solo el gestor que registró el lote puede editarlo', true);
+                    return;
+                }
+
+                document.getElementById('editId').value = item.id;
+                document.getElementById('modalTitulo').textContent = `Editar Lote: ${item.lote} (${item.proceso})`;
+                document.getElementById('cortadora').value = item.cortadora;
+                document.getElementById('lote').value = item.lote;
+                document.getElementById('referencia').value = item.referencia;
+                document.getElementById('operario').value = item.operario;
+                document.getElementById('modalGestorTurno').value = item.gestorTurno;
+                document.getElementById('turno').value = item.turno;
+                document.getElementById('fechaTurno').value = item.fechaTurno;
+                velEstandarInput.value = item.velEstandar;
+                velRealInput.value = item.velReal;
+                verificarVelocidadBajoEstandar();
+                justificacionVelocidadInput.value = item.justificacionVelocidad || '';
+
+                document.getElementById('kgProducidos').value = item.kgProducidos || '';
+                document.getElementById('kgDesperdicioLiquidado').value = item.kgDesperdicioLiquidado || '';
+                document.getElementById('cambioCuchilla').value = item.cambioCuchilla || 'Ninguno';
+                document.getElementById('afectoRolloSemiterminado').value = item.afectoRolloSemiterminado || 'No';
+                document.getElementById('observacionesCuchillas').value = item.observacionesCuchillas || '';
+
+                document.getElementById('estadoLote').value = item.estadoLote;
+                estadoCajaSelect.value = item.estadoCaja || 'OK';
+                if (item.estadoCaja === 'Faltante') {
+                    wrapperJustificacionCaja.classList.remove('hidden');
+                    justificacionFaltanteInput.value = item.justificacionFaltante || '';
+                } else {
+                    wrapperJustificacionCaja.classList.add('hidden');
+                    justificacionFaltanteInput.value = '';
+                }
+                document.getElementById('observaciones').value = item.observaciones || '';
+
+                isExportacionCb.checked = !!item.isExportacion;
+                bloqueExportacion.classList.toggle('hidden', !item.isExportacion);
+                renderPalletsModal(item.pallets || []);
+                renderSegregacionModal(item.segregacion || []);
+
+                prepararCamposModalPorProceso(item.customValues || {});
+                renderNovedadesModal(item.novedades || []);
+                renderRechazosModal(item.rechazos || []);
+                renderRetencionesModal(item.retenciones || []);
+                modalLote.classList.remove('hidden');
+            };
+
+            window.eliminarLote = function(id) {
+                const item = lotesData.find(x => x.id === id);
+                if (!item) return;
+                const esAdmin = usuarioActual && usuarioActual.modo === 'admin';
+                const esPropietario = usuarioActual && (item.creadoPorCedula === usuarioActual.cedula || item.gestorTurno === usuarioActual.nombre);
+                if (!esAdmin && !esPropietario) {
+                    mostrarToast('Restricción: Solo el gestor que registró el lote o el Administrador puede eliminarlo', true);
+                    return;
+                }
+                if (confirm(`¿Estás seguro de eliminar el registro del lote ${item.lote}?`)) {
+                    lotesData = lotesData.filter(x => x.id !== id);
+                    actualizarUI();
+                    mostrarToast('Lote eliminado');
+                }
+            };
+
+            // ==================== MODAL DE LIQUIDACIÓN DE METAS Y METROS POR MÁQUINA (OPCIÓN 1) ====================
+            const modalMetasMaquinas = document.getElementById('modalMetasMaquinas');
+            const listaEditorMetasContainer = document.getElementById('listaEditorMetasContainer');
+            const inputTurnoMetrosFecha = document.getElementById('inputTurnoMetrosFecha');
+            const inputTurnoMetrosTurno = document.getElementById('inputTurnoMetrosTurno');
+            const inputTurnoMetrosGestor = document.getElementById('inputTurnoMetrosGestor');
+
+            window.toggleAusenciaMaquina = function(selectEl) {
+                const row = selectEl.closest('.meta-row');
+                if (!row) return;
+                const box = row.querySelector('.meta-ausencia-box');
+                if (box) box.classList.toggle('hidden', selectEl.value !== 'Sí');
+            };
+
+            window.toggleDesprogramadaMaquina = function(cbEl) {
+                const row = cbEl.closest('.meta-row');
+                if (!row) return;
+                const inpMeta = row.querySelector('.meta-input-meta');
+                const inpReal = row.querySelector('.meta-input-real');
+                const wrapperInputs = row.querySelector('.meta-inputs-wrapper');
+                if (cbEl.checked) {
+                    if (inpMeta) {
+                        inpMeta.setAttribute('data-prev-meta', inpMeta.value);
+                        inpMeta.value = 0;
+                        inpMeta.disabled = true;
+                    }
+                    if (inpReal) {
+                        inpReal.setAttribute('data-prev-real', inpReal.value);
+                        inpReal.value = 0;
+                        inpReal.disabled = true;
+                    }
+                    if (wrapperInputs) wrapperInputs.classList.add('opacity-50');
+                } else {
+                    if (inpMeta) {
+                        inpMeta.disabled = false;
+                        const prevM = inpMeta.getAttribute('data-prev-meta') || inpMeta.getAttribute('data-default-meta') || 10000;
+                        if (parseFloat(inpMeta.value) === 0) inpMeta.value = prevM;
+                    }
+                    if (inpReal) {
+                        inpReal.disabled = false;
+                        const prevR = inpReal.getAttribute('data-prev-real') || 0;
+                        inpReal.value = prevR;
+                    }
+                    if (wrapperInputs) wrapperInputs.classList.remove('opacity-50');
+                }
+            };
+
+            const selectHistorialTurnosMetas = document.getElementById('selectHistorialTurnosMetas');
+            const boxAdminMoverFechaTurnoMetas = document.getElementById('boxAdminMoverFechaTurnoMetas');
+            const adminCorregirMetrosFecha = document.getElementById('adminCorregirMetrosFecha');
+            const adminCorregirMetrosTurno = document.getElementById('adminCorregirMetrosTurno');
+            const lockIconMetrosGestor = document.getElementById('lockIconMetrosGestor');
+
+            function esPropietarioTurnoMetros(reg) {
+                if (!usuarioActual || usuarioActual.modo === 'solo_lectura') return false;
+                if (usuarioActual.modo === 'admin') return true;
+                if (!reg) return true;
+                return (reg.creadoPorCedula && reg.creadoPorCedula === usuarioActual.cedula) ||
+                       (reg.gestor && reg.gestor === usuarioActual.nombre);
+            }
+
+            function poblarSelectGestorMetrosModal(nombreSeleccionado) {
+                const esAdmin = usuarioActual && usuarioActual.modo === 'admin';
+                const gestoresProc = obtenerGestoresActuales();
+                const nombresUnicos = new Set([...gestoresProc]);
+                if (usuarioActual && usuarioActual.nombre) nombresUnicos.add(usuarioActual.nombre);
+                if (nombreSeleccionado) nombresUnicos.add(nombreSeleccionado);
+
+                inputTurnoMetrosGestor.innerHTML = '';
+                nombresUnicos.forEach(nom => {
+                    const opt = document.createElement('option');
+                    opt.value = nom;
+                    opt.textContent = nom;
+                    if (nom === nombreSeleccionado) opt.selected = true;
+                    inputTurnoMetrosGestor.appendChild(opt);
+                });
+
+                if (esAdmin) {
+                    inputTurnoMetrosGestor.disabled = false;
+                    inputTurnoMetrosGestor.className = "w-full px-2.5 py-1.5 bg-white border border-sky-400 rounded-lg font-bold text-xs text-sky-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500";
+                    if (lockIconMetrosGestor) lockIconMetrosGestor.classList.add('hidden');
+                } else {
+                    inputTurnoMetrosGestor.disabled = true;
+                    inputTurnoMetrosGestor.className = "w-full pl-2.5 pr-7 py-1.5 bg-slate-100 border border-sky-300 rounded-lg font-bold text-xs text-slate-700 cursor-not-allowed focus:outline-none appearance-none";
+                    if (lockIconMetrosGestor) lockIconMetrosGestor.classList.remove('hidden');
+                }
+            }
+
+            function poblarHistorialTurnosLiquidadosModal() {
+                if (!selectHistorialTurnosMetas) return;
+                const registrosProc = turnoMetrosData
+                    .filter(tm => (tm.proceso || "Corte") === procesoActual)
+                    .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '') || (b.turno || '').localeCompare(a.turno || ''));
+
+                const fAct = inputTurnoMetrosFecha.value;
+                const tAct = inputTurnoMetrosTurno.value;
+
+                selectHistorialTurnosMetas.innerHTML = '<option value="">-- Seleccionar turno liquidado o elegir Fecha/Turno abajo --</option>';
+                registrosProc.forEach(tm => {
+                    const totalReal = (tm.maquinas || []).reduce((acc, m) => acc + (m.desprogramada ? 0 : (parseFloat(m.real) || 0)), 0);
+                    const opt = document.createElement('option');
+                    opt.value = `${tm.fecha}||${tm.turno}`;
+                    opt.textContent = `${tm.fecha} • ${tm.turno} • Gestor: ${tm.gestor} (${totalReal.toLocaleString()} m reales)`;
+                    if (tm.fecha === fAct && tm.turno === tAct) opt.selected = true;
+                    selectHistorialTurnosMetas.appendChild(opt);
+                });
+            }
+
+            if (selectHistorialTurnosMetas) {
+                selectHistorialTurnosMetas.addEventListener('change', () => {
+                    const val = selectHistorialTurnosMetas.value;
+                    if (!val) return;
+                    const [fSel, tSel] = val.split('||');
+                    if (fSel && tSel) {
+                        inputTurnoMetrosFecha.value = fSel;
+                        inputTurnoMetrosTurno.value = tSel;
+                        renderizarFilasEditorMetrosTurno();
+                    }
+                });
+            }
+
+            function abrirModalLiquidacionMetrosTurno() {
+                if (usuarioActual && usuarioActual.modo === 'solo_lectura') return;
+
+                document.getElementById('lblProcesoNuevaMaq').textContent = procesoActual;
+                inputTurnoMetrosFecha.value = filtroFechaDesde.value || hoyISO;
+                inputTurnoMetrosTurno.value = filtroTurnoGeneral.value || "T1";
+
+                renderizarFilasEditorMetrosTurno();
+                modalMetasMaquinas.classList.remove('hidden');
+            }
+
+            function buscarRegistroTurnoMetros(fecha, turno) {
+                return turnoMetrosData.find(tm => (tm.proceso || "Corte") === procesoActual && tm.fecha === fecha && tm.turno === turno);
+            }
+
+            function renderizarFilasEditorMetrosTurno() {
+                const f = inputTurnoMetrosFecha.value;
+                const t = inputTurnoMetrosTurno.value;
+                const regExistente = buscarRegistroTurnoMetros(f, t);
+                const esAdmin = usuarioActual && usuarioActual.modo === 'admin';
+                const puedeEditarTurno = esPropietarioTurnoMetros(regExistente);
+
+                const gestorMostrar = (regExistente && regExistente.gestor)
+                    ? regExistente.gestor
+                    : (usuarioActual ? usuarioActual.nombre : '');
+                poblarSelectGestorMetrosModal(gestorMostrar);
+                poblarHistorialTurnosLiquidadosModal();
+
+                if (boxAdminMoverFechaTurnoMetas) {
+                    if (esAdmin && regExistente) {
+                        boxAdminMoverFechaTurnoMetas.classList.remove('hidden');
+                        adminCorregirMetrosFecha.value = regExistente.fecha;
+                        adminCorregirMetrosTurno.value = regExistente.turno;
+                    } else {
+                        boxAdminMoverFechaTurnoMetas.classList.add('hidden');
+                    }
+                }
+
+                const bannerSeg = document.getElementById('estadoSeguridadMetasTurno');
+                const btnGuardarMetas = document.getElementById('btnGuardarMetasModal');
+                const btnEliminarMetas = document.getElementById('btnEliminarMetasModal');
+
+                if (regExistente) {
+                    if (esAdmin) {
+                        bannerSeg.className = "px-3 py-2 rounded-xl text-[11px] font-medium border bg-amber-50 text-amber-900 border-amber-300 flex items-center justify-between";
+                        bannerSeg.innerHTML = `<span><i class="fa-solid fa-user-shield text-amber-600 mr-1.5"></i><strong>Modo Administrador:</strong> Puedes editar metros, metas, fecha, turno, cambiar el gestor que liquida (<strong>${regExistente.gestor}</strong>) o eliminar el registro.</span>`;
+                        btnGuardarMetas.classList.remove('hidden');
+                        btnEliminarMetas.classList.remove('hidden');
+                    } else if (puedeEditarTurno) {
+                        bannerSeg.className = "px-3 py-2 rounded-xl text-[11px] font-medium border bg-emerald-50 text-emerald-800 border-emerald-200 flex items-center justify-between";
+                        bannerSeg.innerHTML = `<span><i class="fa-solid fa-shield-halved text-emerald-600 mr-1.5"></i>Registro liquidado por ti (<strong>${regExistente.gestor}</strong>). Puedes editarlo o eliminarlo.</span>`;
+                        btnGuardarMetas.classList.remove('hidden');
+                        btnEliminarMetas.classList.remove('hidden');
+                    } else {
+                        bannerSeg.className = "px-3 py-2 rounded-xl text-[11px] font-medium border bg-rose-50 text-rose-800 border-rose-200 flex items-center justify-between";
+                        bannerSeg.innerHTML = `<span><i class="fa-solid fa-lock text-rose-600 mr-1.5"></i><strong>Bloqueado por seguridad:</strong> Este turno fue registrado por <strong>${regExistente.gestor}</strong>. Solo ese gestor o el Administrador puede modificarlo o eliminarlo.</span>`;
+                        btnGuardarMetas.classList.add('hidden');
+                        btnEliminarMetas.classList.add('hidden');
+                    }
+                } else {
+                    bannerSeg.className = "px-3 py-2 rounded-xl text-[11px] font-medium border bg-slate-50 text-slate-600 border-slate-200";
+                    bannerSeg.innerHTML = esAdmin
+                        ? `<i class="fa-solid fa-circle-info text-sky-600 mr-1.5"></i>Turno aún sin liquidar. Como Administrador puedes elegir el Gestor que Liquida arriba.`
+                        : `<i class="fa-solid fa-circle-info text-sky-600 mr-1.5"></i>Turno aún sin liquidar. Se registrará automáticamente a nombre de <strong>${usuarioActual ? usuarioActual.nombre : ''}</strong>.`;
+                    btnGuardarMetas.classList.remove('hidden');
+                    btnEliminarMetas.classList.add('hidden');
+                }
+
+                const maquinasCat = maquinasPorProceso[procesoActual] || [];
+                listaEditorMetasContainer.innerHTML = '';
+
+                maquinasCat.forEach(m => {
+                    let metaVal = m.meta;
+                    let realVal = 0;
+                    let desprogVal = false;
+                    let ausenciaVal = "No";
+                    let quienFaltoVal = "";
+                    let relevadoPorVal = "";
+
+                    if (regExistente && regExistente.maquinas) {
+                        const mGuardada = regExistente.maquinas.find(x => x.nombre === m.nombre);
+                        if (mGuardada) {
+                            desprogVal = !!mGuardada.desprogramada;
+                            metaVal = desprogVal ? 0 : mGuardada.meta;
+                            realVal = desprogVal ? 0 : mGuardada.real;
+                            ausenciaVal = mGuardada.ausencia || "No";
+                            quienFaltoVal = mGuardada.quienFalto || "";
+                            relevadoPorVal = mGuardada.relevadoPor || "";
+                        }
+                    }
+
+                    const row = document.createElement('div');
+                    row.className = "meta-row bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2";
+                    row.innerHTML = `
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2.5 h-2.5 rounded-full bg-sky-500 flex-shrink-0"></span>
+                                <span class="meta-maq-nombre font-bold text-slate-800 text-xs">${m.nombre}</span>
+                                <label class="flex items-center space-x-1.5 bg-slate-200/80 hover:bg-slate-200 px-2 py-1 rounded-lg border border-slate-300 cursor-pointer ml-1" title="Marcar si la máquina está desprogramada en este turno">
+                                    <input type="checkbox" onchange="toggleDesprogramadaMaquina(this)" class="meta-check-desprog rounded text-slate-800 w-3.5 h-3.5" ${desprogVal ? 'checked' : ''}>
+                                    <span class="text-[10px] font-extrabold uppercase text-slate-700">Desprogramada</span>
+                                </label>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                                <div class="meta-inputs-wrapper flex items-center gap-2 ${desprogVal ? 'opacity-50' : ''}">
+                                    <div class="flex items-center space-x-1">
+                                        <label class="text-[10px] font-bold uppercase text-slate-500">Meta:</label>
+                                        <input type="number" min="0" step="1" value="${metaVal}" data-default-meta="${m.meta}" ${desprogVal ? 'disabled' : ''} class="meta-input-meta w-24 px-2 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 text-xs">
+                                    </div>
+                                    <div class="flex items-center space-x-1">
+                                        <label class="text-[10px] font-bold uppercase text-sky-700">Real:</label>
+                                        <input type="number" min="0" step="1" value="${realVal}" ${desprogVal ? 'disabled' : ''} class="meta-input-real w-24 px-2 py-1 bg-sky-50 border border-sky-300 rounded-lg font-bold text-sky-900 text-xs">
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-1">
+                                    <label class="text-[10px] font-bold uppercase text-amber-700">¿Ausencia?:</label>
+                                    <select onchange="toggleAusenciaMaquina(this)" class="meta-select-ausencia px-2 py-1 bg-white border border-amber-300 rounded-lg font-bold text-xs text-slate-800">
+                                        <option value="No" ${ausenciaVal === 'No' ? 'selected' : ''}>No</option>
+                                        <option value="Sí" ${ausenciaVal === 'Sí' ? 'selected' : ''}>Sí</option>
+                                    </select>
+                                </div>
+                                <button type="button" onclick="eliminarMaquinaCatalogo('${m.nombre}')" class="text-rose-500 hover:text-rose-700 p-1 bg-rose-50 rounded-lg" title="Eliminar máquina del catálogo">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="meta-ausencia-box ${ausenciaVal === 'Sí' ? '' : 'hidden'} bg-amber-50/80 p-2.5 rounded-lg border border-amber-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[9px] font-extrabold text-amber-900 uppercase mb-0.5">¿Quién faltó en esta máquina?</label>
+                                <input type="text" value="${quienFaltoVal}" placeholder="Nombre del operario ausente..." class="meta-input-quien-falto w-full px-2 py-1 bg-white border border-amber-300 rounded-md text-xs font-semibold text-slate-800">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-extrabold text-amber-900 uppercase mb-0.5">¿Por quién fue relevado?</label>
+                                <input type="text" value="${relevadoPorVal}" placeholder="Nombre del operario relevo..." class="meta-input-relevado-por w-full px-2 py-1 bg-white border border-amber-300 rounded-md text-xs font-semibold text-slate-800">
+                            </div>
+                        </div>
+                    `;
+                    if (!puedeEditarTurno) {
+                        row.querySelectorAll('input, select, button').forEach(el => {
+                            el.disabled = true;
+                            el.classList.add('cursor-not-allowed', 'opacity-60');
+                        });
+                    }
+                    listaEditorMetasContainer.appendChild(row);
+                });
+            }
+
+            inputTurnoMetrosFecha.addEventListener('change', renderizarFilasEditorMetrosTurno);
+            inputTurnoMetrosTurno.addEventListener('change', renderizarFilasEditorMetrosTurno);
+
+            document.getElementById('btnAbrirModalMetas').addEventListener('click', abrirModalLiquidacionMetrosTurno);
+            document.getElementById('btnSemaforoMetrosHeader').addEventListener('click', abrirModalLiquidacionMetrosTurno);
+            document.getElementById('btnCerrarModalMetas').addEventListener('click', () => modalMetasMaquinas.classList.add('hidden'));
+
+            window.eliminarMaquinaCatalogo = function(nombreMaq) {
+                if (confirm(`¿Eliminar ${nombreMaq} del catálogo del proceso ${procesoActual}?`)) {
+                    maquinasPorProceso[procesoActual] = (maquinasPorProceso[procesoActual] || []).filter(m => m.nombre !== nombreMaq);
+                    renderizarFilasEditorMetrosTurno();
+                    actualizarUI();
+                    mostrarToast('Máquina eliminada del catálogo');
+                }
+            };
+
+            document.getElementById('btnAddCortadoraConMetas').addEventListener('click', () => {
+                const nom = document.getElementById('inputNuevaCortadoraNombre').value.trim();
+                if (!nom) return;
+                if (!maquinasPorProceso[procesoActual]) maquinasPorProceso[procesoActual] = [];
+                if (!maquinasPorProceso[procesoActual].some(m => m.nombre === nom)) {
+                    maquinasPorProceso[procesoActual].push({ nombre: nom, meta: 10000 });
+                }
+                document.getElementById('inputNuevaCortadoraNombre').value = '';
+                renderizarFilasEditorMetrosTurno();
+                actualizarUI();
+                mostrarToast('Máquina añadida al proceso');
+            });
+
+            document.getElementById('btnGuardarMetasModal').addEventListener('click', () => {
+                const fOrig = inputTurnoMetrosFecha.value;
+                const tOrig = inputTurnoMetrosTurno.value;
+                const regExistente = buscarRegistroTurnoMetros(fOrig, tOrig);
+                const esAdmin = usuarioActual && usuarioActual.modo === 'admin';
+
+                if (regExistente && !esPropietarioTurnoMetros(regExistente)) {
+                    mostrarToast(`Restricción: Solo ${regExistente.gestor} o el Administrador puede modificar las metas y metros de este turno`, true);
+                    return;
+                }
+
+                // Si el Admin corrigió la fecha o el turno en el panel de corrección, usamos los nuevos valores
+                const fFinal = (esAdmin && regExistente && adminCorregirMetrosFecha && adminCorregirMetrosFecha.value)
+                    ? adminCorregirMetrosFecha.value
+                    : fOrig;
+                const tFinal = (esAdmin && regExistente && adminCorregirMetrosTurno && adminCorregirMetrosTurno.value)
+                    ? adminCorregirMetrosTurno.value
+                    : tOrig;
+
+                // Si es Admin, toma el gestor seleccionado en el desplegable; si no es Admin, mantiene el propietario o el usuario actual
+                const g = esAdmin
+                    ? (inputTurnoMetrosGestor.value || (usuarioActual ? usuarioActual.nombre : ''))
+                    : (regExistente ? regExistente.gestor : (usuarioActual ? usuarioActual.nombre : inputTurnoMetrosGestor.value));
+
+                const usuarioGestorObj = usuariosLista.find(u => u.nombre === g);
+                const cedCreador = usuarioGestorObj
+                    ? usuarioGestorObj.cedula
+                    : (regExistente && regExistente.creadoPorCedula ? regExistente.creadoPorCedula : (usuarioActual ? usuarioActual.cedula : ''));
+
+                const rows = listaEditorMetasContainer.querySelectorAll('.meta-row');
+                const maquinasLiquidacion = [];
+
+                rows.forEach(r => {
+                    const nombre = r.querySelector('.meta-maq-nombre').textContent.trim();
+                    const desprogramada = r.querySelector('.meta-check-desprog') ? r.querySelector('.meta-check-desprog').checked : false;
+                    const meta = desprogramada ? 0 : (parseFloat(r.querySelector('.meta-input-meta').value) || 0);
+                    const real = desprogramada ? 0 : (parseFloat(r.querySelector('.meta-input-real').value) || 0);
+                    const ausencia = r.querySelector('.meta-select-ausencia') ? r.querySelector('.meta-select-ausencia').value : 'No';
+                    const quienFalto = (ausencia === 'Sí' && r.querySelector('.meta-input-quien-falto')) ? r.querySelector('.meta-input-quien-falto').value.trim() : '';
+                    const relevadoPor = (ausencia === 'Sí' && r.querySelector('.meta-input-relevado-por')) ? r.querySelector('.meta-input-relevado-por').value.trim() : '';
+                    maquinasLiquidacion.push({ nombre, meta, real, desprogramada, ausencia, quienFalto, relevadoPor });
+
+                    // Actualizar la meta predeterminada del catálogo solo si no estaba desprogramada
+                    if (!desprogramada && meta > 0) {
+                        const cat = (maquinasPorProceso[procesoActual] || []).find(m => m.nombre === nombre);
+                        if (cat) cat.meta = meta;
+                    }
+                });
+
+                // Si el Admin movió el registro a otra fecha o turno donde ya existía otro registro, reemplazamos limpiamente
+                if (regExistente && (fFinal !== fOrig || tFinal !== tOrig)) {
+                    turnoMetrosData = turnoMetrosData.filter(tm =>
+                        tm.id !== regExistente.id &&
+                        !((tm.proceso || "Corte") === procesoActual && tm.fecha === fFinal && tm.turno === tFinal)
+                    );
+                    turnoMetrosData.push({
+                        id: regExistente.id,
+                        proceso: procesoActual,
+                        fecha: fFinal,
+                        turno: tFinal,
+                        gestor: g,
+                        creadoPorCedula: cedCreador,
+                        maquinas: maquinasLiquidacion
+                    });
+                } else {
+                    const idxExistente = turnoMetrosData.findIndex(tm => (tm.proceso || "Corte") === procesoActual && tm.fecha === fFinal && tm.turno === tFinal);
+                    const nuevoTurnoMetro = {
+                        id: idxExistente !== -1 ? turnoMetrosData[idxExistente].id : ('TM-' + Date.now()),
+                        proceso: procesoActual,
+                        fecha: fFinal,
+                        turno: tFinal,
+                        gestor: g,
+                        creadoPorCedula: cedCreador,
+                        maquinas: maquinasLiquidacion
+                    };
+
+                    if (idxExistente !== -1) {
+                        turnoMetrosData[idxExistente] = nuevoTurnoMetro;
+                    } else {
+                        turnoMetrosData.push(nuevoTurnoMetro);
+                    }
+                }
+
+                modalMetasMaquinas.classList.add('hidden');
+                actualizarUI();
+                mostrarToast(`Metas y metros guardados para el turno ${tFinal} (${fFinal}) • Gestor: ${g}`);
+            });
+
+            document.getElementById('btnEliminarMetasModal').addEventListener('click', () => {
+                const f = inputTurnoMetrosFecha.value;
+                const t = inputTurnoMetrosTurno.value;
+                const regExistente = buscarRegistroTurnoMetros(f, t);
+                if (!regExistente) return;
+
+                if (!esPropietarioTurnoMetros(regExistente)) {
+                    mostrarToast(`Restricción: Solo ${regExistente.gestor} puede eliminar el registro de este turno`, true);
+                    return;
+                }
+
+                if (confirm(`¿Estás seguro de eliminar la liquidación de metas y metros del turno ${t} (${f})?`)) {
+                    turnoMetrosData = turnoMetrosData.filter(tm => tm.id !== regExistente.id);
+                    actualizarUI();
+                    renderizarFilasEditorMetrosTurno();
+                    mostrarToast(`Registro del turno ${t} (${f}) eliminado`);
+                }
+            });
+
+            // ==================== MODAL CONFIGURACIÓN ADMIN (100% EDITABLE Y ELIMINABLE) ====================
+            const modalConfigAdmin = document.getElementById('modalConfigAdmin');
+            document.getElementById('btnConfigFormulario').addEventListener('click', () => {
+                renderConfigAdminModal();
+                modalConfigAdmin.classList.remove('hidden');
+            });
+            document.getElementById('btnCerrarConfigAdmin').addEventListener('click', () => modalConfigAdmin.classList.add('hidden'));
+
+            window.setPresetUnidadVelocidad = function(unidad) {
+                document.getElementById('inputUnidadVelocidadProceso').value = unidad;
+            };
+
+            document.getElementById('btnGuardarUnidadVelocidad').addEventListener('click', () => {
+                const nuevaUnidad = document.getElementById('inputUnidadVelocidadProceso').value.trim();
+                if (!nuevaUnidad) return;
+                if (!formConfig.unidadVelocidadPorProceso) formConfig.unidadVelocidadPorProceso = {};
+                formConfig.unidadVelocidadPorProceso[procesoActual] = nuevaUnidad;
+                lotesData.forEach(l => {
+                    if ((l.proceso || "Corte") === procesoActual) {
+                        l.unidadVelocidad = nuevaUnidad;
+                    }
+                });
+                actualizarUI();
+                mostrarToast(`Unidad de velocidad para ${procesoActual} actualizada a "${nuevaUnidad}"`);
+            });
+
+            function renderConfigAdminModal() {
+                document.getElementById('lblConfigProcesoActual').textContent = procesoActual;
+                document.getElementById('lblUnidadProcesoActual').textContent = procesoActual;
+                document.getElementById('inputUnidadVelocidadProceso').value = obtenerUnidadVelocidadActual(procesoActual);
+
+                const renderChipsEditables = (key, bgClass, textClass) => {
+                    return (formConfig[key] || []).map((c, i) => `
+                        <span class="${bgClass} ${textClass} px-2.5 py-1 rounded-lg font-semibold flex items-center space-x-1.5">
+                            <span contenteditable="true" onblur="editarItemConfig('${key}', ${i}, this.textContent)" class="focus:outline-none border-b border-dashed border-slate-400" title="Haz clic para renombrar">${c}</span>
+                            <button type="button" onclick="eliminarItemConfig('${key}', ${i})" class="hover:text-rose-600 ml-1" title="Eliminar"><i class="fa-solid fa-xmark"></i></button>
+                        </span>
+                    `).join('');
+                };
+
+                document.getElementById('listaCausalesParada').innerHTML = renderChipsEditables('causalesParada', 'bg-amber-100', 'text-amber-900');
+                document.getElementById('listaExtraFieldsParada').innerHTML = renderChipsEditables('extraFieldsParada', 'bg-slate-200', 'text-slate-800');
+                document.getElementById('listaCausalesRechazo').innerHTML = renderChipsEditables('causalesRechazo', 'bg-rose-100', 'text-rose-900');
+                document.getElementById('listaExtraFieldsRechazo').innerHTML = renderChipsEditables('extraFieldsRechazo', 'bg-slate-200', 'text-slate-800');
+                document.getElementById('listaCausalesRetencion').innerHTML = renderChipsEditables('causalesRetencion', 'bg-amber-100', 'text-amber-900');
+                document.getElementById('listaExtraFieldsRetencion').innerHTML = renderChipsEditables('extraFieldsRetencion', 'bg-slate-200', 'text-slate-800');
+                document.getElementById('listaEstadosPalletConfig').innerHTML = renderChipsEditables('estadosPallet', 'bg-sky-100', 'text-sky-900');
+                document.getElementById('listaDefectosSegConfig').innerHTML = renderChipsEditables('defectosSegregacion', 'bg-rose-100', 'text-rose-900');
+                document.getElementById('listaEstadosSegConfig').innerHTML = renderChipsEditables('estadosSegregacion', 'bg-purple-100', 'text-purple-900');
+
+                const nombresBloques = {
+                    velocidades: "Velocidades y Metros",
+                    tiemposImproductivos: "Tiempos Improductivos",
+                    rechazos: "Registro de Rechazos",
+                    retenciones: "Registro de Retenciones",
+                    exportacion: "Sistema de Inventario (Pallets)",
+                    kilosLiquidacion: "Kg Producidos y Desperdicio Liq.",
+                    manejoCuchillas: "Manejo de Cuchillas",
+                    observaciones: "Cuadro de Observaciones"
+                };
+                const estadoBloques = formConfig.bloquesPorProceso[procesoActual] || {};
+                const contChecks = document.getElementById('checkboxesBloquesProceso');
+                contChecks.innerHTML = Object.entries(nombresBloques).map(([key, label]) => `
+                    <label class="flex items-center space-x-2 bg-white p-2.5 rounded-xl border border-slate-200 cursor-pointer">
+                        <input type="checkbox" ${estadoBloques[key] !== false ? 'checked' : ''} onchange="toggleBloqueProceso('${key}', this.checked)" class="rounded text-sky-600">
+                        <span class="font-semibold text-slate-700">${label}</span>
+                    </label>
+                `).join('');
+
+                const customCols = formConfig.customFieldsPorProceso[procesoActual] || [];
+                document.getElementById('listaNuevosCamposLote').innerHTML = customCols.map((cf, i) => `
+                    <span class="bg-sky-100 text-sky-900 border border-sky-300 px-3 py-1 rounded-xl font-bold flex items-center space-x-2">
+                        <span>${cf}</span>
+                        <button type="button" onclick="eliminarCampoPersonalizado(${i})" class="text-rose-600 hover:text-rose-800"><i class="fa-solid fa-trash"></i></button>
+                    </span>
+                `).join('');
+            }
+
+            window.editarItemConfig = function(key, idx, nuevoTexto) {
+                const limpio = nuevoTexto.trim();
+                if (!limpio) {
+                    renderConfigAdminModal();
+                    return;
+                }
+                formConfig[key][idx] = limpio;
+                guardarTodo();
+            };
+
+            window.eliminarItemConfig = function(key, idx) {
+                formConfig[key].splice(idx, 1);
+                guardarTodo();
+                renderConfigAdminModal();
+                mostrarToast('Opción eliminada');
+            };
+
+            window.toggleBloqueProceso = function(key, val) {
+                if (!formConfig.bloquesPorProceso[procesoActual]) formConfig.bloquesPorProceso[procesoActual] = {};
+                formConfig.bloquesPorProceso[procesoActual][key] = val;
+                actualizarUI();
+            };
+
+            window.eliminarCampoPersonalizado = function(idx) {
+                formConfig.customFieldsPorProceso[procesoActual].splice(idx, 1);
+                actualizarUI();
+                renderConfigAdminModal();
+            };
+
+            document.getElementById('btnAddCausalParada').addEventListener('click', () => {
+                const v = document.getElementById('inputNuevaCausalParada').value.trim();
+                if (!v) return;
+                formConfig.causalesParada.push(v);
+                document.getElementById('inputNuevaCausalParada').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddExtraFieldParada').addEventListener('click', () => {
+                const v = document.getElementById('inputExtraFieldParada').value.trim();
+                if (!v) return;
+                formConfig.extraFieldsParada.push(v);
+                document.getElementById('inputExtraFieldParada').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddCausalRechazo').addEventListener('click', () => {
+                const v = document.getElementById('inputNuevaCausalRechazo').value.trim();
+                if (!v) return;
+                formConfig.causalesRechazo.push(v);
+                document.getElementById('inputNuevaCausalRechazo').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddExtraFieldRechazo').addEventListener('click', () => {
+                const v = document.getElementById('inputExtraFieldRechazo').value.trim();
+                if (!v) return;
+                formConfig.extraFieldsRechazo.push(v);
+                document.getElementById('inputExtraFieldRechazo').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddCausalRetencion').addEventListener('click', () => {
+                const v = document.getElementById('inputNuevaCausalRetencion').value.trim();
+                if (!v) return;
+                formConfig.causalesRetencion.push(v);
+                document.getElementById('inputNuevaCausalRetencion').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddExtraFieldRetencion').addEventListener('click', () => {
+                const v = document.getElementById('inputExtraFieldRetencion').value.trim();
+                if (!v) return;
+                formConfig.extraFieldsRetencion.push(v);
+                document.getElementById('inputExtraFieldRetencion').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddEstadoPallet').addEventListener('click', () => {
+                const v = document.getElementById('inputNuevoEstadoPallet').value.trim();
+                if (!v) return;
+                formConfig.estadosPallet.push(v);
+                document.getElementById('inputNuevoEstadoPallet').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddDefectoSeg').addEventListener('click', () => {
+                const v = document.getElementById('inputNuevoDefectoSeg').value.trim();
+                if (!v) return;
+                formConfig.defectosSegregacion.push(v);
+                document.getElementById('inputNuevoDefectoSeg').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddEstadoSeg').addEventListener('click', () => {
+                const v = document.getElementById('inputNuevoEstadoSeg').value.trim();
+                if (!v) return;
+                formConfig.estadosSegregacion.push(v);
+                document.getElementById('inputNuevoEstadoSeg').value = '';
+                guardarTodo();
+                renderConfigAdminModal();
+            });
+
+            document.getElementById('btnAddNuevoCampoLote').addEventListener('click', () => {
+                const v = document.getElementById('inputNuevoCampoLote').value.trim();
+                if (!v) return;
+                if (!formConfig.customFieldsPorProceso[procesoActual]) formConfig.customFieldsPorProceso[procesoActual] = [];
+                formConfig.customFieldsPorProceso[procesoActual].push(v);
+                document.getElementById('inputNuevoCampoLote').value = '';
+                actualizarUI();
+                renderConfigAdminModal();
+                mostrarToast(`Campo "${v}" añadido`);
+            });
+
+            // ==================== GESTIÓN DE USUARIOS ====================
+            const modalUsuarios = document.getElementById('modalUsuarios');
+            document.getElementById('btnAbrirUsuarios').addEventListener('click', () => {
+                const optActual = document.getElementById('optNuProcesoActual');
+                if (optActual) optActual.textContent = `Proceso Actual (${procesoActual})`;
+                renderUsuariosAdmin();
+                modalUsuarios.classList.remove('hidden');
+            });
+            document.getElementById('btnCerrarUsuarios').addEventListener('click', () => modalUsuarios.classList.add('hidden'));
+
+            function renderUsuariosAdmin() {
+                const cont = document.getElementById('listaUsuariosAdmin');
+                cont.innerHTML = '';
+
+                usuariosLista.forEach((u, idx) => {
+                    const cargoTag = u.cargo ? `<span class="text-[10px] font-bold bg-sky-100 text-sky-800 px-2 py-0.5 rounded-md border border-sky-200">${u.cargo}${u.procesoAsignado ? ' • ' + u.procesoAsignado : ''}</span>` : '';
+                    const div = document.createElement('div');
+                    div.className = "bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2";
+                    div.innerHTML = `
+                        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                            <input type="text" value="${u.cedula}" onchange="cambiarCedulaUsuario(${idx}, this.value)" title="Editar Cédula"
+                                class="font-mono font-bold bg-white border border-slate-300 px-2 py-1 rounded-lg text-slate-800 w-28">
+                            <input type="text" value="${u.nombre}" onchange="cambiarNombreUsuario(${idx}, this.value)" title="Editar Nombre"
+                                class="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 w-48">
+                            ${cargoTag}
+                        </div>
+                        <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                            <input type="text" value="${u.pass}" onchange="cambiarClaveDirectaUsuario(${idx}, this.value)" title="Editar Contraseña"
+                                class="font-mono px-2 py-1 bg-white border border-slate-300 rounded-lg text-slate-700 w-28">
+                            <select onchange="cambiarModoUsuario(${idx}, this.value)" class="px-2.5 py-1 bg-white border border-slate-300 rounded-lg font-semibold">
+                                <option value="operativo" ${u.modo === 'operativo' ? 'selected' : ''}>Operativo</option>
+                                <option value="solo_lectura" ${u.modo === 'solo_lectura' ? 'selected' : ''}>Solo Lectura</option>
+                                <option value="admin" ${u.modo === 'admin' ? 'selected' : ''}>Administrador</option>
+                            </select>
+                            <button type="button" onclick="eliminarUsuario(${idx})" class="text-rose-600 hover:text-rose-800 p-1.5 bg-rose-50 rounded-lg" title="Eliminar Usuario">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    cont.appendChild(div);
+                });
+            }
+
+            window.cambiarCedulaUsuario = function(idx, nuevaCed) {
+                const limpia = nuevaCed.trim();
+                if (!limpia) return;
+                usuariosLista[idx].cedula = limpia;
+                guardarTodo();
+                mostrarToast('Cédula actualizada');
+            };
+
+            window.cambiarClaveDirectaUsuario = function(idx, nuevaPass) {
+                const limpia = nuevaPass.trim();
+                if (!limpia) return;
+                usuariosLista[idx].pass = limpia;
+                guardarTodo();
+                mostrarToast('Contraseña actualizada');
+            };
+
+            window.cambiarNombreUsuario = function(idx, nuevoNombre) {
+                const nombreLimpio = nuevoNombre.trim();
+                if (!nombreLimpio) return;
+                const nombreAnterior = usuariosLista[idx].nombre;
+                usuariosLista[idx].nombre = nombreLimpio;
+
+                Object.keys(gestoresPorProceso).forEach(proc => {
+                    const idxG = gestoresPorProceso[proc].indexOf(nombreAnterior);
+                    if (idxG !== -1) gestoresPorProceso[proc][idxG] = nombreLimpio;
+                });
+
+                Object.keys(jefesPorProceso).forEach(proc => {
+                    (jefesPorProceso[proc] || []).forEach(j => {
+                        if (j.nombre === nombreAnterior) j.nombre = nombreLimpio;
+                    });
+                });
+
+                lotesData.forEach(l => {
+                    if (l.gestorTurno === nombreAnterior) l.gestorTurno = nombreLimpio;
+                });
+
+                if (usuarioActual && usuarioActual.cedula === usuariosLista[idx].cedula) {
+                    usuarioActual.nombre = nombreLimpio;
+                    document.getElementById('headerUserName').textContent = nombreLimpio;
+                }
+
+                actualizarUI();
+                mostrarToast('Nombre de usuario actualizado');
+            };
+
+            window.cambiarModoUsuario = function(idx, nuevoModo) {
+                usuariosLista[idx].modo = nuevoModo;
+                guardarTodo();
+                mostrarToast('Nivel actualizado');
+            };
+
+            window.eliminarUsuario = function(idx) {
+                if (usuariosLista.length <= 1) {
+                    mostrarToast('Debe existir al menos un usuario en el sistema', true);
+                    return;
+                }
+                usuariosLista.splice(idx, 1);
+                guardarTodo();
+                renderUsuariosAdmin();
+                mostrarToast('Usuario eliminado');
+            };
+
+            document.getElementById('btnCrearUsuario').addEventListener('click', () => {
+                const ced = document.getElementById('nuCedula').value.trim();
+                const nom = document.getElementById('nuNombre').value.trim();
+                const pas = document.getElementById('nuPass').value.trim() || 'Litoplas2026';
+                const mod = document.getElementById('nuModoAcceso').value;
+                const cargoProc = document.getElementById('nuCargoProceso').value;
+                const procSel = document.getElementById('nuProcesoAsignado').value;
+
+                if (!ced || !nom) {
+                    mostrarToast('Completa la cédula y el nombre', true);
+                    return;
+                }
+                if (usuariosLista.some(x => x.cedula === ced)) {
+                    mostrarToast('Esa cédula ya existe', true);
+                    return;
+                }
+
+                const todosLosProcesos = ["Extrusión", "Impresión", "Laminación", "Extlam", "Corte", "Sellado"];
+                const procesosTarget = procSel === "TODOS"
+                    ? todosLosProcesos
+                    : [procSel === "ACTUAL" ? procesoActual : procSel];
+                const etiquetaProceso = procSel === "TODOS" ? "Todos" : (procSel === "ACTUAL" ? procesoActual : procSel);
+
+                usuariosLista.push({
+                    cedula: ced,
+                    nombre: nom,
+                    pass: pas,
+                    modo: mod,
+                    cargo: cargoProc !== "Ninguno" ? cargoProc : "",
+                    procesoAsignado: cargoProc !== "Ninguno" ? etiquetaProceso : ""
+                });
+
+                if (cargoProc === "Gestor") {
+                    procesosTarget.forEach(p => {
+                        if (!Array.isArray(gestoresPorProceso[p])) gestoresPorProceso[p] = [];
+                        if (!gestoresPorProceso[p].includes(nom)) {
+                            gestoresPorProceso[p].push(nom);
+                        }
+                    });
+                } else if (["Coordinador", "Jefe de Proceso", "Especialista", "Gerente"].includes(cargoProc)) {
+                    procesosTarget.forEach(p => {
+                        if (!Array.isArray(jefesPorProceso[p])) jefesPorProceso[p] = [];
+                        const existente = jefesPorProceso[p].find(x => (x.nombre || '').toLowerCase() === nom.toLowerCase());
+                        if (existente) {
+                            existente.cargo = cargoProc;
+                        } else {
+                            jefesPorProceso[p].push({ nombre: nom, cargo: cargoProc });
+                        }
+                    });
+                }
+
+                document.getElementById('nuCedula').value = '';
+                document.getElementById('nuNombre').value = '';
+                actualizarUI();
+                renderUsuariosAdmin();
+                mostrarToast(cargoProc !== "Ninguno" ? `Usuario creado y asignado como ${cargoProc} (${etiquetaProceso})` : 'Usuario agregado al sistema');
+            });
+
+            // ==================== GESTORES INDEPENDIENTES ====================
+            const modalGestores = document.getElementById('modalGestores');
+            document.getElementById('btnGestionGestores').addEventListener('click', () => {
+                document.getElementById('lblGestoresProcesoActual').textContent = procesoActual;
+                renderGestoresModal();
+                modalGestores.classList.remove('hidden');
+            });
+            document.getElementById('btnCerrarModalGestores').addEventListener('click', () => modalGestores.classList.add('hidden'));
+
+            function renderGestoresModal() {
+                const cont = document.getElementById('listaGestoresContainer');
+                const gestoresActuales = obtenerGestoresActuales();
+                if (gestoresActuales.length === 0) {
+                    cont.innerHTML = `<div class="text-center text-slate-400 italic py-2">Sin gestores en este proceso. Añade uno arriba.</div>`;
+                    return;
+                }
+                cont.innerHTML = gestoresActuales.map((g, i) => `
+                    <div class="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 gap-2">
+                        <input type="text" value="${g}" onchange="renombrarGestorProceso(${i}, this.value)" class="font-semibold bg-white border border-slate-300 rounded-lg px-2 py-1 flex-grow text-xs">
+                        <button type="button" onclick="eliminarGestor(${i})" class="text-rose-500 hover:text-rose-700 p-1.5 bg-rose-50 rounded-lg" title="Eliminar Gestor"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                `).join('');
+            }
+
+            window.renombrarGestorProceso = function(i, nuevoNom) {
+                const limpio = nuevoNom.trim();
+                if (!limpio) return;
+                const gestoresActuales = obtenerGestoresActuales();
+                gestoresActuales[i] = limpio;
+                actualizarUI();
+                mostrarToast('Gestor renombrado');
+            };
+
+            window.eliminarGestor = function(i) {
+                const gestoresActuales = obtenerGestoresActuales();
+                gestoresActuales.splice(i, 1);
+                actualizarUI();
+                renderGestoresModal();
+                mostrarToast('Gestor eliminado del proceso');
+            };
+
+            document.getElementById('btnAddGestorSubmit').addEventListener('click', () => {
+                const v = document.getElementById('nuevoGestorInput').value.trim();
+                const gestoresActuales = obtenerGestoresActuales();
+                if (!v || gestoresActuales.includes(v)) return;
+                gestoresActuales.push(v);
+                document.getElementById('nuevoGestorInput').value = '';
+                actualizarUI();
+                renderGestoresModal();
+            });
+
+            // ==================== JEFES DEL PROCESO (COORDINADORES, ESPECIALISTAS, GERENTES) ====================
+            const modalJefes = document.getElementById('modalJefes');
+            document.getElementById('btnGestionJefes').addEventListener('click', () => {
+                document.getElementById('lblJefesProcesoActual').textContent = procesoActual;
+                renderJefesModal();
+                modalJefes.classList.remove('hidden');
+            });
+            document.getElementById('btnCerrarModalJefes').addEventListener('click', () => modalJefes.classList.add('hidden'));
+
+            function renderJefesModal() {
+                const cont = document.getElementById('listaJefesContainer');
+                const jefesActuales = obtenerJefesActuales();
+                if (jefesActuales.length === 0) {
+                    cont.innerHTML = `<div class="text-center text-slate-400 italic py-2">Sin jefes registrados en este proceso. Añade uno arriba.</div>`;
+                    return;
+                }
+                const cargosOpts = ["Coordinador", "Especialista", "Gerente", "Jefe de Proceso"];
+                cont.innerHTML = jefesActuales.map((j, i) => `
+                    <div class="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 gap-2">
+                        <input type="text" value="${j.nombre || ''}" onchange="editarNombreJefeProceso(${i}, this.value)" class="font-semibold bg-white border border-slate-300 rounded-lg px-2 py-1 flex-grow text-xs">
+                        <select onchange="editarCargoJefeProceso(${i}, this.value)" class="bg-amber-50 border border-amber-300 text-amber-900 font-bold rounded-lg px-2 py-1 text-[11px]">
+                            ${cargosOpts.map(c => `<option value="${c}" ${j.cargo === c ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                        <button type="button" onclick="eliminarJefeProceso(${i})" class="text-rose-500 hover:text-rose-700 p-1.5 bg-rose-50 rounded-lg" title="Eliminar Jefe"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                `).join('');
+            }
+
+            window.editarNombreJefeProceso = function(i, nuevoNom) {
+                const limpio = nuevoNom.trim();
+                if (!limpio) return;
+                const jefesActuales = obtenerJefesActuales();
+                if (jefesActuales[i]) jefesActuales[i].nombre = limpio;
+                guardarTodo();
+                mostrarToast('Nombre de jefe actualizado');
+            };
+
+            window.editarCargoJefeProceso = function(i, nuevoCargo) {
+                const jefesActuales = obtenerJefesActuales();
+                if (jefesActuales[i]) jefesActuales[i].cargo = nuevoCargo;
+                guardarTodo();
+                mostrarToast('Cargo actualizado');
+            };
+
+            window.eliminarJefeProceso = function(i) {
+                const jefesActuales = obtenerJefesActuales();
+                jefesActuales.splice(i, 1);
+                guardarTodo();
+                renderJefesModal();
+                mostrarToast('Jefe eliminado del proceso');
+            };
+
+            document.getElementById('btnAddJefeSubmit').addEventListener('click', () => {
+                const nom = document.getElementById('nuevoJefeNombreInput').value.trim();
+                const car = document.getElementById('nuevoJefeCargoSelect').value;
+                const jefesActuales = obtenerJefesActuales();
+                if (!nom) return;
+                if (jefesActuales.some(x => (x.nombre || '').toLowerCase() === nom.toLowerCase())) {
+                    mostrarToast('Esta persona ya está en los jefes del proceso', true);
+                    return;
+                }
+                jefesActuales.push({ nombre: nom, cargo: car });
+                document.getElementById('nuevoJefeNombreInput').value = '';
+                guardarTodo();
+                renderJefesModal();
+                mostrarToast(`${car} añadido al proceso ${procesoActual}`);
+            });
+
+            // ==================== EXPORTAR EXCEL MULTICAPA (7 PESTAÑAS) ====================
+            function exportarRegistrosAExcelMulticapa(listaRegistros, sufijoArchivo) {
+                if (!listaRegistros || listaRegistros.length === 0) {
+                    mostrarToast('No hay registros para exportar con el filtro actual', true);
+                    return;
+                }
+
+                const wb = XLSX.utils.book_new();
+                const mapaDeltas = calcularDiferencialesPorOT();
+
+                // 1. PESTAÑA: RESUMEN DE LOTES
+                const sheetResumen = listaRegistros.map(item => {
+                    const unidadVel = item.unidadVelocidad || obtenerUnidadVelocidadActual(item.proceso || procesoActual);
+                    const minParada = (item.novedades || []).reduce((acc, n) => acc + (parseInt(n.minutos) || 0), 0);
+                    const kgRechCalidad = (item.rechazos || []).reduce((acc, r) => acc + (parseFloat(r.kilos) || 0), 0);
+                    const kgRetCalidad = (item.retenciones || []).reduce((acc, r) => acc + (parseFloat(r.kilos) || 0), 0);
+                    const undsRetCalidad = (item.retenciones || []).reduce((acc, r) => acc + (parseInt(r.unidades) || 0), 0);
+                    const deltaInfo = mapaDeltas[item.id] || { deltaKg: parseFloat(item.kgProducidos) || 0, deltaDesp: parseFloat(item.kgDesperdicioLiquidado) || 0 };
+
+                    let row = {
+                        "Proceso": item.proceso || procesoActual,
+                        "Fecha": item.fechaTurno,
+                        "Turno": item.turno,
+                        "Lote / OT": item.lote,
+                        "Máquina": item.cortadora,
+                        "Referencia": item.referencia,
+                        "Operario": item.operario,
+                        "Gestor": item.gestorTurno,
+                        "Vel. Estándar": item.velEstandar,
+                        "Vel. Real": item.velReal,
+                        "Unidad Velocidad": unidadVel,
+                        "Justificación Bajo Std": item.justificacionVelocidad || "",
+                        "Minutos Parada": minParada,
+                        "Kg Rechazos Calidad": kgRechCalidad,
+                        "Kg Retenciones Calidad": kgRetCalidad,
+                        "Unds Retenciones Calidad": undsRetCalidad,
+                        "Kg Producidos Acumulados": parseFloat(item.kgProducidos) || 0,
+                        "Kg Producidos en Turno (Delta)": deltaInfo.deltaKg,
+                        "Desperdicio Acumulado (Kg)": parseFloat(item.kgDesperdicioLiquidado) || 0,
+                        "Desperdicio en Turno (Kg Delta)": deltaInfo.deltaDesp,
+                        "Sistema de Inventario": item.isExportacion ? "SÍ" : "NO",
+                        "Total Pallets": (item.pallets || []).length,
+                        "Cambio Cuchilla": item.cambioCuchilla || "Ninguno",
+                        "Afectó Rollo": item.afectoRolloSemiterminado || "No",
+                        "Obs. Cuchillas": item.observacionesCuchillas || "",
+                        "Cierre Caja": item.estadoCaja,
+                        "Justificación Faltante": item.justificacionFaltante || "",
+                        "Estado Lote": item.estadoLote,
+                        "Observaciones Generales": item.observaciones || ""
+                    };
+                    if (item.customValues) {
+                        Object.entries(item.customValues).forEach(([k, v]) => {
+                            row[`Campo Extra: ${k}`] = v;
+                        });
+                    }
+                    return row;
+                });
+
+                // 2. PESTAÑA: CONSOLIDADO POR OT / LOTE (ÚLTIMO REPORTE Y SUMA DE DELTAS EXACTA)
+                const mapaOT = {};
+                listaRegistros.forEach(item => {
+                    const key = `${item.proceso || procesoActual}||${item.lote}`;
+                    const deltaInfo = mapaDeltas[item.id] || { deltaKg: parseFloat(item.kgProducidos) || 0, deltaDesp: parseFloat(item.kgDesperdicioLiquidado) || 0 };
+
+                    if (!mapaOT[key]) {
+                        mapaOT[key] = {
+                            "Proceso": item.proceso || procesoActual,
+                            "Lote / OT": item.lote,
+                            "Referencia": item.referencia,
+                            "Turnos Registrados": 0,
+                            "Kg Producidos Reales (No Duplicados)": 0,
+                            "Desperdicio Liquidado Total (Kg)": 0,
+                            "Minutos Parada Totales": 0,
+                            "Kg Rechazos Estándar": 0,
+                            "Kg Retenciones Estándar": 0,
+                            "Unds Retenciones Estándar": 0,
+                            "Total Pallets Inventario": 0,
+                            "Kg Pallets Óptima (Paso a P)": 0,
+                            "Kg Pallets Retenidos": 0,
+                            "Kg Pallets Rechazados": 0,
+                            "Kg Rechazo Dentro de Pallets": 0,
+                            "Unds a Segregar en Pallets": 0,
+                            "Kg Segregados en Línea": 0,
+                            "Unds Segregadas en Línea": 0
+                        };
+                    }
+                    const m = mapaOT[key];
+                    m["Turnos Registrados"] += 1;
+                    m["Kg Producidos Reales (No Duplicados)"] += deltaInfo.deltaKg;
+                    m["Desperdicio Liquidado Total (Kg)"] += deltaInfo.deltaDesp;
+                    (item.novedades || []).forEach(n => { m["Minutos Parada Totales"] += parseInt(n.minutos) || 0; });
+                    (item.rechazos || []).forEach(r => { m["Kg Rechazos Estándar"] += parseFloat(r.kilos) || 0; });
+                    (item.retenciones || []).forEach(r => {
+                        m["Kg Retenciones Estándar"] += parseFloat(r.kilos) || 0;
+                        m["Unds Retenciones Estándar"] += parseInt(r.unidades) || 0;
+                    });
+                    if (item.isExportacion) {
+                        (item.pallets || []).forEach(p => {
+                            m["Total Pallets Inventario"] += 1;
+                            const kp = parseFloat(p.kilos) || 0;
+                            if ((p.estado || '').includes('Óptima')) m["Kg Pallets Óptima (Paso a P)"] += kp;
+                            else if ((p.estado || '').includes('Retenida')) m["Kg Pallets Retenidos"] += kp;
+                            else {
+                                m["Kg Pallets Rechazados"] += kp;
+                                m["Kg Rechazo Dentro de Pallets"] += parseFloat(p.kgRechazo) || 0;
+                                m["Unds a Segregar en Pallets"] += parseInt(p.unidadesSegregar) || 0;
+                            }
+                        });
+                        (item.segregacion || []).forEach(s => {
+                            m["Kg Segregados en Línea"] += parseFloat(s.kilos) || 0;
+                            m["Unds Segregadas en Línea"] += parseInt(s.unidades) || 0;
+                        });
+                    }
+                });
+                const sheetConsolidadoOT = Object.values(mapaOT);
+
+                // 3. PESTAÑA: INVENTARIO PALLETS EXPORTACIÓN
+                const sheetPallets = [];
+                listaRegistros.forEach(item => {
+                    if (item.isExportacion && item.pallets && item.pallets.length > 0) {
+                        item.pallets.forEach(p => {
+                            const esRech = esEstadoPalletRechazado(p.estado);
+                            sheetPallets.push({
+                                "Fecha": item.fechaTurno,
+                                "Turno": item.turno,
+                                "Proceso": item.proceso || procesoActual,
+                                "Lote / OT": item.lote,
+                                "Máquina": item.cortadora,
+                                "Referencia": item.referencia,
+                                "Operario": item.operario,
+                                "Gestor": item.gestorTurno,
+                                "ID Pallet": p.id,
+                                "Peso Pallet (Kg)": parseFloat(p.kilos) || 0,
+                                "Estado Logístico Pallet": p.estado,
+                                "Kg de Dicho Rechazo": esRech ? (parseFloat(p.kgRechazo) || 0) : 0,
+                                "Unidades a Segregar": esRech ? (parseInt(p.unidadesSegregar) || 0) : 0,
+                                "Causal / Defecto": esRech ? (p.defecto || "") : "",
+                                "Proceso Causa Raíz": esRech ? (p.procesoRaiz || "") : "",
+                                "Trazabilidad / Rango": esRech ? (p.trazabilidad || "") : "",
+                                "Estado Unidad(es)": esRech ? (p.estadoUnidad || "") : "",
+                                "Observación": esRech ? (p.observacion || p.motivoSegregar || "") : ""
+                            });
+                        });
+                    }
+                });
+                if (sheetPallets.length === 0) {
+                    sheetPallets.push({ "Mensaje": "Sin pallets de exportación registrados en los lotes filtrados" });
+                }
+
+                // 4. PESTAÑA: SEGREGACIÓN EN LÍNEA (SIN PALLET)
+                const sheetSegregacion = [];
+                listaRegistros.forEach(item => {
+                    if (item.isExportacion && item.segregacion && item.segregacion.length > 0) {
+                        item.segregacion.forEach(s => {
+                            sheetSegregacion.push({
+                                "Fecha": item.fechaTurno,
+                                "Turno": item.turno,
+                                "Proceso": item.proceso || procesoActual,
+                                "Lote / OT": item.lote,
+                                "Máquina": item.cortadora,
+                                "Referencia": item.referencia,
+                                "Operario": item.operario,
+                                "Gestor": item.gestorTurno,
+                                "Peso Segregado (Kg)": parseFloat(s.kilos) || 0,
+                                "Unidades Segregadas": parseInt(s.unidades) || 0,
+                                "Causal / Defecto": s.defecto || "",
+                                "Proceso Causa Raíz": s.procesoRaiz || "",
+                                "Trazabilidad / Rango": s.trazabilidad || "",
+                                "Estado Unidad(es)": s.estadoUnidad || "",
+                                "Observación": s.observacion || ""
+                            });
+                        });
+                    }
+                });
+                if (sheetSegregacion.length === 0) {
+                    sheetSegregacion.push({ "Mensaje": "Sin segregación en línea registrada en los lotes filtrados" });
+                }
+
+                // 5. PESTAÑA: RECHAZOS DE CALIDAD ESTÁNDAR
+                const sheetRechazos = [];
+                listaRegistros.forEach(item => {
+                    if (item.rechazos && item.rechazos.length > 0) {
+                        item.rechazos.forEach(r => {
+                            let rowR = {
+                                "Fecha": item.fechaTurno,
+                                "Turno": item.turno,
+                                "Proceso que Reporta": item.proceso || procesoActual,
+                                "Lote / OT": item.lote,
+                                "Máquina": item.cortadora,
+                                "Referencia": item.referencia,
+                                "Operario": item.operario,
+                                "Gestor que Reporta": item.gestorTurno,
+                                "Proceso Causa Raíz / Origen": r.proceso,
+                                "Trazabilidad Rollo": r.trazabilidadRollo || "",
+                                "Unidades Rechazadas": parseInt(r.unidades) || 0,
+                                "Kilos Rechazados (Kg)": parseFloat(r.kilos) || 0,
+                                "Socialización Gestor": r.gestor || "",
+                                "Descripción Defecto": r.defecto || ""
+                            };
+                            if (r.extras) {
+                                Object.entries(r.extras).forEach(([k, v]) => { rowR[`Extra: ${k}`] = v; });
+                            }
+                            sheetRechazos.push(rowR);
+                        });
+                    }
+                });
+                if (sheetRechazos.length === 0) {
+                    sheetRechazos.push({ "Mensaje": "Sin rechazos estándar registrados en los lotes filtrados" });
+                }
+
+                // 6. PESTAÑA: RETENCIONES DE CALIDAD
+                const sheetRetenciones = [];
+                listaRegistros.forEach(item => {
+                    if (item.retenciones && item.retenciones.length > 0) {
+                        item.retenciones.forEach(r => {
+                            let rowRet = {
+                                "Fecha": item.fechaTurno,
+                                "Turno": item.turno,
+                                "Proceso que Reporta": item.proceso || procesoActual,
+                                "Lote / OT": item.lote,
+                                "Máquina": item.cortadora,
+                                "Referencia": item.referencia,
+                                "Operario": item.operario,
+                                "Gestor que Reporta": item.gestorTurno,
+                                "Proceso Causa Raíz / Origen": r.proceso,
+                                "Trazabilidad Rollo": r.trazabilidadRollo || "",
+                                "Unidades Retenidas": parseInt(r.unidades) || 0,
+                                "Kilos Retenidos (Kg)": parseFloat(r.kilos) || 0,
+                                "Socialización Gestor": r.gestor || "",
+                                "Descripción Defecto": r.defecto || ""
+                            };
+                            if (r.extras) {
+                                Object.entries(r.extras).forEach(([k, v]) => { rowRet[`Extra: ${k}`] = v; });
+                            }
+                            sheetRetenciones.push(rowRet);
+                        });
+                    }
+                });
+                if (sheetRetenciones.length === 0) {
+                    sheetRetenciones.push({ "Mensaje": "Sin retenciones registradas en los lotes filtrados" });
+                }
+
+                // 7. PESTAÑA: PARADAS DE MÁQUINA (TIEMPOS IMPRODUCTIVOS)
+                const sheetParadas = [];
+                listaRegistros.forEach(item => {
+                    if (item.novedades && item.novedades.length > 0) {
+                        item.novedades.forEach(n => {
+                            let rowN = {
+                                "Fecha": item.fechaTurno,
+                                "Turno": item.turno,
+                                "Proceso": item.proceso || procesoActual,
+                                "Lote / OT": item.lote,
+                                "Máquina": item.cortadora,
+                                "Referencia": item.referencia,
+                                "Operario": item.operario,
+                                "Gestor": item.gestorTurno,
+                                "Causal de Parada": n.tipo,
+                                "Minutos Improductivos": parseInt(n.minutos) || 0,
+                                "Descripción Parada": n.descripcion || ""
+                            };
+                            if (n.extras) {
+                                Object.entries(n.extras).forEach(([k, v]) => { rowN[`Extra: ${k}`] = v; });
+                            }
+                            sheetParadas.push(rowN);
+                        });
+                    }
+                });
+                if (sheetParadas.length === 0) {
+                    sheetParadas.push({ "Mensaje": "Sin paradas de máquina registradas en los lotes filtrados" });
+                }
+
+                // 7. PESTAÑA: METROS Y METAS POR MÁQUINA (TURNO A TURNO)
+                const sheetMetrosTurno = [];
+                turnoMetrosData
+                    .filter(tm => (tm.proceso || "Corte") === procesoActual && cumpleRangoFecha(tm.fecha))
+                    .forEach(tm => {
+                        (tm.maquinas || []).forEach(m => {
+                            const pct = m.meta > 0 ? Math.round((m.real / m.meta) * 100) : 0;
+                            sheetMetrosTurno.push({
+                                "Fecha": tm.fecha,
+                                "Turno": tm.turno,
+                                "Gestor": tm.gestor,
+                                "Proceso": tm.proceso || procesoActual,
+                                "Máquina": m.nombre,
+                                "Estado Programación": m.desprogramada ? "Desprogramada" : "Programada",
+                                "Meta Turno (m)": m.desprogramada ? 0 : m.meta,
+                                "Metros Reales (m)": m.desprogramada ? 0 : m.real,
+                                "Cumplimiento (%)": m.desprogramada ? "Desprogramada" : `${pct}%`,
+                                "¿Hubo Ausencia?": m.ausencia || "No",
+                                "Quién Faltó": m.ausencia === "Sí" ? (m.quienFalto || "") : "",
+                                "Relevado Por": m.ausencia === "Sí" ? (m.relevadoPor || "") : ""
+                            });
+                        });
+                    });
+                if (sheetMetrosTurno.length === 0) {
+                    sheetMetrosTurno.push({ "Mensaje": "Sin liquidaciones de metros por turno registradas en el periodo" });
+                }
+
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetResumen), "1_Resumen_Lotes");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetConsolidadoOT), "2_Consolidado_OT");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetPallets), "3_Inventario_Pallets");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetSegregacion), "4_Segregacion_Linea");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetRechazos), "5_Rechazos_Calidad");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetRetenciones), "6_Retenciones_Calidad");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetParadas), "7_Paradas_Maquina");
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheetMetrosTurno), "8_Metros_Por_Maquina");
+
+                XLSX.writeFile(wb, `Litoplas_${procesoActual}_${sufijoArchivo}.xlsx`);
+                mostrarToast('Excel exportado con 8 pestañas desglosadas');
+            }
+
+            document.getElementById('btnExportarExcel').addEventListener('click', () => {
+                const filtrados = obtenerLotesFiltrados();
+                const valorOT = filtroLoteOTGeneral.value.trim();
+                const sufijo = valorOT ? `OT_${valorOT}` : hoyISO;
+                exportarRegistrosAExcelMulticapa(filtrados, sufijo);
+            });
+
+            window.exportarExcelOT = function(codigoLote) {
+                const registrosOT = lotesData.filter(l => (l.proceso || "Corte") === procesoActual && l.lote === codigoLote);
+                exportarRegistrosAExcelMulticapa(registrosOT, `OT_${codigoLote}`);
+            };
+
+            document.getElementById('btnAbrirPython').addEventListener('click', () => {
+                const dictUsers = usuariosLista.map(u => `    "${u.cedula}": {"nombre": "${u.nombre}", "pass": "${u.pass}", "rol": "${u.modo}"}`).join(',\n');
+                document.getElementById('pythonCodeBlock').textContent = `from flask import Flask, render_template
+
+app = Flask(__name__)
+app.secret_key = "litoplas_secret"
+
+USUARIOS = {
+${dictUsers}
+}
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+if __name__ == "__main__":
+    app.run(debug=True)`;
+                document.getElementById('modalPython').classList.remove('hidden');
+            });
+            document.getElementById('btnCerrarPython').addEventListener('click', () => document.getElementById('modalPython').classList.add('hidden'));
+
+            document.getElementById('btnGuardarCambios').addEventListener('click', () => {
+                guardarTodo();
+                mostrarToast('Cambios guardados');
+            });
+
+            document.getElementById('btnLimpiarDatos').addEventListener('click', () => {
+                if (confirm(`¿Vaciar registros de ${procesoActual}?`)) {
+                    lotesData = lotesData.filter(x => (x.proceso || "Corte") !== procesoActual);
+                    actualizarUI();
+                    mostrarToast('Registros reiniciados');
+                }
+            });
+
+            function actualizarUI() {
+                guardarTodo();
+                poblarSelects();
+                renderizarSemaforoVertical();
+                actualizarHeaderSemaforo();
+                renderizarTabla();
+                actualizarKPIs();
+                actualizarBadgeNotificaciones();
+            }
+
+
+            // ==================== SINCRONIZACIÓN COMPLETA Y SEGURA (USUARIOS, LOTES Y METROS) ====================
+            const BIN_ID = "6ae1738cffd5d1605391b6fd";
+            const API_KEY = "$2a$10$0K9iaEk1M.AWNc2ZqDnqseetAVO.69cxFMbIPNnAoIg0fQQh1BD1K";
+
+            async function cargarDatosDeNube(mostrarToastAviso = false) {
+                try {
+                    const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                        headers: {
+                            'X-Master-Key': API_KEY
+                        },
+                        cache: 'no-store'
+                    });
+                    const res = await response.json();
+                    if (res && res.record) {
+                        let huboCambios = false;
+
+                        if (Array.isArray(res.record.usuarios) && res.record.usuarios.length > 0) {
+                            usuariosLista = res.record.usuarios;
+                        }
+
+                        if (Array.isArray(res.record.lotes)) {
+                            const idsLocales = new Set(lotesData.map(l => l.id));
+                            res.record.lotes.forEach(loteNube => {
+                                if (!idsLocales.has(loteNube.id)) {
+                                    lotesData.unshift(loteNube);
+                                    huboCambios = true;
+                                }
+                            });
+                        }
+
+                        if (Array.isArray(res.record.turnoMetros)) {
+                            turnoMetrosData = res.record.turnoMetros;
+                        }
+                        if (Array.isArray(res.record.notificaciones)) {
+                            notificacionesData = res.record.notificaciones;
+                        }
+
+                        if (usuarioActual && huboCambios) {
+                            actualizarUI();
+                            if (mostrarToastAviso) {
+                                mostrarToast('Nuevos datos sincronizados');
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Modo local (sin conexión a nube)", err);
+                }
+            }
+
+            async function subirDatosANube() {
+                try {
+                    const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                        headers: { 'X-Master-Key': API_KEY },
+                        cache: 'no-store'
+                    });
+                    const res = await response.json();
+                    let lotesFinales = [...lotesData];
+
+                    if (res && res.record && Array.isArray(res.record.lotes)) {
+                        const idsActuales = new Set(lotesFinales.map(l => l.id));
+                        res.record.lotes.forEach(loteNube => {
+                            if (!idsActuales.has(loteNube.id)) {
+                                lotesFinales.push(loteNube);
+                            }
+                        });
+                    }
+
+                    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Master-Key': API_KEY
+                        },
+                        body: JSON.stringify({
+                            usuarios: usuariosLista,
+                            lotes: lotesFinales,
+                            turnoMetros: turnoMetrosData,
+                            notificaciones: notificacionesData
+                        })
+                    });
+                } catch (err) {
+                    console.error("Error al subir a nube", err);
+                }
+            }
+
+            // Sincronización automática en segundo plano cada 5 segundos para actualizar dispositivos en tiempo real
+            setInterval(() => {
+                if (document.getElementById('modalLote').classList.contains('hidden') && 
+                    document.getElementById('modalMetasMaquinas').classList.contains('hidden')) {
+                    cargarDatosDeNube(false);
+                }
+            }, 5000);
+
+            cargarDatosDeNube();
+
+        });
+
+    </script>
+</body>
+</html>
