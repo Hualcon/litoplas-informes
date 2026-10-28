@@ -1125,6 +1125,50 @@
         </div>
     </div>
 
+
+    <!-- ==================== MODAL DETALLE INTERACTIVO DE NOTIFICACIÓN ==================== -->
+    <div id="modalDetalleNotif" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl overflow-hidden fade-in text-xs">
+            <div class="bg-slate-900 px-6 py-4 flex justify-between items-center text-white">
+                <div class="flex items-center space-x-2">
+                    <span id="dnBadgeTipo" class="px-2.5 py-0.5 rounded-md font-extrabold text-[10px] uppercase border"></span>
+                    <h3 id="dnTituloOT" class="font-extrabold text-sm tracking-wide"></h3>
+                </div>
+                <button type="button" id="btnCerrarDetalleNotif" class="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 max-h-[78vh] overflow-y-auto">
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 grid grid-cols-2 gap-2 text-slate-700">
+                    <div><span class="text-slate-400 font-bold block text-[10px] uppercase">Proceso Notificado:</span> <strong id="dnProceso"></strong></div>
+                    <div><span class="text-slate-400 font-bold block text-[10px] uppercase">Fecha y Turno:</span> <strong id="dnFechaTurno"></strong></div>
+                    <div><span class="text-slate-400 font-bold block text-[10px] uppercase">Gestor Emisor:</span> <strong id="dnGestor"></strong></div>
+                    <div><span class="text-slate-400 font-bold block text-[10px] uppercase">Referencia:</span> <strong id="dnReferencia"></strong></div>
+                </div>
+
+                <div class="bg-sky-50/60 p-3.5 rounded-xl border border-sky-200 text-slate-800">
+                    <span class="text-[10px] font-bold text-sky-800 uppercase block mb-1">Descripción de la Novedad</span>
+                    <p id="dnMensaje" class="font-medium text-slate-700 leading-relaxed"></p>
+                </div>
+
+                <div id="dnFotoContainer" class="space-y-2">
+                    <span class="text-[10px] font-bold text-slate-500 uppercase block">Evidencia Fotográfica</span>
+                    <div class="bg-slate-900 p-2 rounded-xl border border-slate-800 text-center">
+                        <img id="dnFotoImg" src="" alt="Evidencia" class="max-h-64 mx-auto rounded-lg object-contain cursor-pointer shadow hover:opacity-95" onclick="verFotoModal(this.src)" title="Clic para vista completa">
+                        <span class="text-[10px] text-sky-400 block mt-1 italic"><i class="fa-solid fa-magnifying-glass-plus mr-1"></i>Clic en la imagen para pantalla completa</span>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+                    <span id="dnTimestamp" class="text-[10px] text-slate-400"></span>
+                    <button type="button" id="btnMarcarEstaLeida" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl font-bold shadow-sm">
+                        Entendido / Marcar como leída
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- ==================== MODAL VISOR DE FOTO DE NOVEDAD ==================== -->
     <div id="modalVisorFoto" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm hidden p-4">
         <div class="bg-slate-900 rounded-2xl shadow-2xl border border-slate-800 w-full max-w-lg overflow-hidden text-white">
@@ -1505,9 +1549,11 @@
             // Notificaciones Data
             let notificacionesData = JSON.parse(localStorage.getItem('litoplas_v2_notificaciones')) || [];
 
+            // Persistir notificaciones en local Y subir a JSONBin para que las lecturas no se reviertan
             function guardarNotificaciones() {
                 localStorage.setItem('litoplas_v2_notificaciones', JSON.stringify(notificacionesData));
                 actualizarBadgeNotificaciones();
+                subirDatosANube();
             }
 
             function actualizarBadgeNotificaciones() {
@@ -1516,13 +1562,15 @@
                     if (badge) badge.classList.add('hidden');
                     return;
                 }
-                const usuarioNombre = usuarioActual.nombre;
-                const procList = ["Extrusión", "Impresión", "Laminación", "Extlam", "Corte", "Sellado"];
+                const nombre = usuarioActual.nombre;
+                const cedula = usuarioActual.cedula;
 
                 const noLeidas = notificacionesData.filter(n => {
-                    if (n.leida) return false;
                     const dest = n.destinatarios || [];
-                    return dest.includes(usuarioNombre) || dest.includes("TODOS");
+                    const aplicaUsuario = dest.includes(nombre) || dest.includes("TODOS");
+                    if (!aplicaUsuario) return false;
+                    const leidaPor = n.leidaPor || {};
+                    return !(leidaPor[cedula] || leidaPor[nombre] || n.leida);
                 });
 
                 if (noLeidas.length > 0) {
@@ -1533,7 +1581,8 @@
                 }
             }
 
-            function generarNotificacionNovedadesLote(loteItem) {
+            // Generador universal de notificaciones (Creación y Edición / Pallets y Segregación)
+            function generarNotificacionNovedadesLote(loteItem, esEdicion = false) {
                 const proc = loteItem.proceso || "Corte";
                 const gestoresProc = gestoresPorProceso[proc] || [];
                 const jefesProc = (jefesPorProceso[proc] || []).map(j => j.nombre);
@@ -1542,8 +1591,9 @@
                 let novedadesItems = [];
 
                 if (loteItem.rechazos && loteItem.rechazos.length > 0) {
-                    loteItem.rechazos.forEach(r => {
+                    loteItem.rechazos.forEach((r, idx) => {
                         novedadesItems.push({
+                            key: `rec_${loteItem.id}_${r.trazabilidadRollo || idx}_${r.defecto}`,
                             tipo: "Rechazo",
                             detalle: `Rechazo en ${r.proceso} (${r.trazabilidadRollo || 'S/T'}): ${r.kilos}kg / ${r.unidades}u - Defecto: ${r.defecto}`,
                             foto: r.fotoBase64 || ""
@@ -1552,8 +1602,9 @@
                 }
 
                 if (loteItem.retenciones && loteItem.retenciones.length > 0) {
-                    loteItem.retenciones.forEach(r => {
+                    loteItem.retenciones.forEach((r, idx) => {
                         novedadesItems.push({
+                            key: `ret_${loteItem.id}_${r.trazabilidadRollo || idx}_${r.defecto}`,
                             tipo: "Retención",
                             detalle: `Retención en ${r.proceso} (${r.trazabilidadRollo || 'S/T'}): ${r.kilos}kg / ${r.unidades}u - Defecto: ${r.defecto}`,
                             foto: r.fotoBase64 || ""
@@ -1565,48 +1616,65 @@
                     if (loteItem.pallets && loteItem.pallets.length > 0) {
                         loteItem.pallets.forEach(p => {
                             const v = (p.estado || '').toLowerCase();
-                            if (v.includes('rechaz') || v.includes('segregar')) {
+                            const tieneRechazo = v.includes('rechaz') || v.includes('segregar') || (parseFloat(p.kgRechazo) > 0);
+                            const tieneFoto = !!p.fotoBase64;
+                            if (tieneRechazo || tieneFoto) {
                                 novedadesItems.push({
+                                    key: `pal_${loteItem.id}_${p.id}`,
                                     tipo: "Inventario Pallet",
-                                    detalle: `Pallet ${p.id} (${p.kilos}kg): Rechazo ${p.kgRechazo}kg / ${p.unidadesSegregar}u - Raíz: ${p.procesoRaiz} (${p.defecto})`,
+                                    detalle: `Pallet ${p.id} (${p.kilos || 0}kg): ${p.kgRechazo || 0}kg / ${p.unidadesSegregar || 0}u - Raíz: ${p.procesoRaiz || 'N/A'} (${p.defecto || p.estado})`,
                                     foto: p.fotoBase64 || ""
                                 });
                             }
                         });
                     }
+
                     if (loteItem.segregacion && loteItem.segregacion.length > 0) {
-                        loteItem.segregacion.forEach(s => {
+                        loteItem.segregacion.forEach((s, idx) => {
                             novedadesItems.push({
+                                key: `seg_${loteItem.id}_${idx}_${s.trazabilidad || ''}`,
                                 tipo: "Segregación en Línea",
-                                detalle: `Segregado en línea (${s.kilos}kg / ${s.unidades}u) - Raíz: ${s.procesoRaiz} (${s.defecto})`,
+                                detalle: `Segregado en línea (${s.kilos || 0}kg / ${s.unidades || 0}u) - Raíz: ${s.procesoRaiz || 'N/A'} (${s.defecto || 'Novedad'})`,
                                 foto: s.fotoBase64 || ""
                             });
                         });
                     }
                 }
 
-                if (novedadesItems.length === 0) return;
-
+                let hubonuevas = false;
                 novedadesItems.forEach(nov => {
-                    notificacionesData.unshift({
-                        id: 'NOTIF-' + Date.now() + '-' + Math.floor(Math.random()*1000),
-                        loteId: loteItem.id,
-                        proceso: proc,
-                        lote: loteItem.lote,
-                        referencia: loteItem.referencia,
-                        gestorEmisor: loteItem.gestorTurno,
-                        turno: loteItem.turno,
-                        fecha: loteItem.fechaTurno,
-                        tipoNovedad: nov.tipo,
-                        mensaje: nov.detalle,
-                        foto: nov.foto || '',
-                        destinatarios: destinatarios,
-                        leida: false,
-                        timestamp: new Date().toLocaleString()
-                    });
+                    const existente = notificacionesData.find(n => n.novedadKey === nov.key);
+                    if (!existente) {
+                        notificacionesData.unshift({
+                            id: 'NOTIF-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+                            novedadKey: nov.key,
+                            loteId: loteItem.id,
+                            proceso: proc,
+                            lote: loteItem.lote,
+                            referencia: loteItem.referencia,
+                            gestorEmisor: loteItem.gestorTurno,
+                            turno: loteItem.turno,
+                            fecha: loteItem.fechaTurno,
+                            tipoNovedad: nov.tipo,
+                            mensaje: nov.detalle,
+                            foto: nov.foto || '',
+                            destinatarios: destinatarios,
+                            leidaPor: {},
+                            leida: false,
+                            timestamp: new Date().toLocaleString()
+                        });
+                        hubonuevas = true;
+                    } else if (!existente.foto && nov.foto) {
+                        existente.foto = nov.foto;
+                        existente.leidaPor = {};
+                        existente.leida = false;
+                        hubonuevas = true;
+                    }
                 });
 
-                guardarNotificaciones();
+                if (hubonuevas) {
+                    guardarNotificaciones();
+                }
             }
 
             const modalBandejaNotif = document.getElementById('modalBandejaNotif');
@@ -1624,9 +1692,13 @@
             document.getElementById('btnMarcarLeidasNotif').addEventListener('click', () => {
                 if (!usuarioActual) return;
                 const nombre = usuarioActual.nombre;
+                const cedula = usuarioActual.cedula;
                 notificacionesData.forEach(n => {
                     const dest = n.destinatarios || [];
                     if (dest.includes(nombre) || dest.includes("TODOS")) {
+                        if (!n.leidaPor) n.leidaPor = {};
+                        n.leidaPor[cedula] = true;
+                        n.leidaPor[nombre] = true;
                         n.leida = true;
                     }
                 });
@@ -1635,12 +1707,15 @@
                 mostrarToast('Todas las notificaciones marcadas como leídas');
             });
 
+            // Renderizado de tarjetas interactivas clicables
             function renderizarBandejaNotificaciones() {
                 const cont = document.getElementById('listaBandejaNotifContainer');
                 const emptyMsg = document.getElementById('emptyNotifMsg');
                 if (!usuarioActual || !cont) return;
 
                 const nombre = usuarioActual.nombre;
+                const cedula = usuarioActual.cedula;
+
                 const misNotificaciones = notificacionesData.filter(n => {
                     const dest = n.destinatarios || [];
                     return dest.includes(nombre) || dest.includes("TODOS");
@@ -1651,62 +1726,108 @@
                     emptyMsg.classList.remove('hidden');
                     return;
                 }
-                emptyNotifMsg.classList.add('hidden');
+                emptyMsg.classList.add('hidden');
 
                 cont.innerHTML = misNotificaciones.map(n => {
-                    let fotoSrc = n.foto || '';
-                    if (!fotoSrc) {
-                        // Búsqueda de respaldo en el lote original por si la notificación no la guardó directamente
-                        const loteAsoc = lotesData.find(l => l.id === n.loteId || (l.lote === n.lote && (l.proceso || 'Corte') === n.proceso));
-                        if (loteAsoc) {
-                            if (n.tipoNovedad === 'Rechazo' && loteAsoc.rechazos) {
-                                const r = loteAsoc.rechazos.find(x => x.fotoBase64);
-                                if (r) fotoSrc = r.fotoBase64;
-                            } else if (n.tipoNovedad === 'Retención' && loteAsoc.retenciones) {
-                                const ret = loteAsoc.retenciones.find(x => x.fotoBase64);
-                                if (ret) fotoSrc = ret.fotoBase64;
-                            } else if (loteAsoc.isExportacion) {
-                                const p = (loteAsoc.pallets || []).find(x => x.fotoBase64);
-                                const s = (loteAsoc.segregacion || []).find(x => x.fotoBase64);
-                                if (p) fotoSrc = p.fotoBase64;
-                                else if (s) fotoSrc = s.fotoBase64;
-                            }
-                        }
-                    }
+                    const leidaPor = n.leidaPor || {};
+                    const estaLeida = !!(leidaPor[cedula] || leidaPor[nombre] || n.leida);
 
-                    let fotoHTML = '';
-                    if (fotoSrc) {
-                        fotoHTML = `
-                            <div class="mt-2 flex items-center space-x-2">
-                                <img src="${fotoSrc}" onclick="verFotoModal(this.src)" class="w-14 h-14 object-cover rounded-lg border border-slate-300 cursor-pointer shadow-sm hover:opacity-90" title="Ver foto de la novedad">
-                                <span class="text-[10px] text-sky-700 italic cursor-pointer font-semibold" onclick="verFotoModal('${fotoSrc}')">Clic en la foto para ampliar</span>
-                            </div>
-                        `;
-                    }
                     const badgeColor = n.tipoNovedad === 'Rechazo' ? 'bg-rose-100 text-rose-800 border-rose-300'
                                      : n.tipoNovedad === 'Retención' ? 'bg-amber-100 text-amber-900 border-amber-300'
                                      : 'bg-purple-100 text-purple-900 border-purple-300';
 
+                    const iconFoto = n.foto ? '<span class="text-sky-600 font-bold ml-1"><i class="fa-solid fa-camera mr-0.5"></i>Con Foto</span>' : '';
+
                     return `
-                        <div class="bg-slate-50 p-3.5 rounded-2xl border ${n.leida ? 'border-slate-200 opacity-80' : 'border-sky-300 shadow-sm bg-sky-50/40'} space-y-1.5 relative">
+                        <div onclick="abrirDetalleNotificacion('${n.id}')" class="cursor-pointer p-3.5 rounded-2xl border transition-all hover:border-sky-400 hover:shadow-md ${estaLeida ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-sky-50/50 border-sky-300 shadow-sm'} space-y-1.5 relative">
                             <div class="flex justify-between items-start">
                                 <div class="flex items-center space-x-2">
                                     <span class="px-2 py-0.5 rounded-md font-extrabold text-[10px] uppercase border ${badgeColor}">${n.tipoNovedad}</span>
                                     <span class="font-bold text-slate-900">OT: ${n.lote} (${n.proceso})</span>
+                                    ${iconFoto}
                                 </div>
                                 <span class="text-[10px] text-slate-400">${n.timestamp}</span>
                             </div>
                             <p class="text-slate-700 font-medium">${n.mensaje}</p>
                             <div class="flex justify-between items-center text-[10px] text-slate-500 pt-1 border-t border-slate-200">
                                 <span>Emisor: <strong>${n.gestorEmisor}</strong> • Turno: ${n.turno} (${n.fecha})</span>
-                                ${!n.leida ? '<span class="text-sky-600 font-bold">● Nueva</span>' : '<span class="text-slate-400">Leída</span>'}
+                                ${!estaLeida ? '<span class="text-sky-600 font-extrabold">● Nueva (Clic para ver)</span>' : '<span class="text-slate-400">Leída</span>'}
                             </div>
-                            ${fotoHTML}
                         </div>
                     `;
                 }).join('');
             }
 
+            // Ventana modal de detalle interactivo
+            let notificacionActivaId = null;
+            window.abrirDetalleNotificacion = function(id) {
+                const n = notificacionesData.find(x => x.id === id);
+                if (!n) return;
+                notificacionActivaId = id;
+
+                document.getElementById('dnTituloOT').textContent = `OT: ${n.lote}`;
+                const badge = document.getElementById('dnBadgeTipo');
+                badge.textContent = n.tipoNovedad;
+                badge.className = `px-2.5 py-0.5 rounded-md font-extrabold text-[10px] uppercase border ${
+                    n.tipoNovedad === 'Rechazo' ? 'bg-rose-100 text-rose-800 border-rose-300' :
+                    n.tipoNovedad === 'Retención' ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                    'bg-purple-100 text-purple-900 border-purple-300'
+                }`;
+
+                document.getElementById('dnProceso').textContent = n.proceso;
+                document.getElementById('dnFechaTurno').textContent = `${n.fecha} (${n.turno})`;
+                document.getElementById('dnGestor').textContent = n.gestorEmisor;
+                document.getElementById('dnReferencia').textContent = n.referencia || 'N/A';
+                document.getElementById('dnMensaje').textContent = n.mensaje;
+                document.getElementById('dnTimestamp').textContent = `Reportado: ${n.timestamp}`;
+
+                let fotoSrc = n.foto || '';
+                if (!fotoSrc) {
+                    const loteAsoc = lotesData.find(l => l.id === n.loteId || (l.lote === n.lote && (l.proceso || 'Corte') === n.proceso));
+                    if (loteAsoc) {
+                        if (n.tipoNovedad === 'Rechazo' && loteAsoc.rechazos) {
+                            const r = loteAsoc.rechazos.find(x => x.fotoBase64);
+                            if (r) fotoSrc = r.fotoBase64;
+                        } else if (n.tipoNovedad === 'Retención' && loteAsoc.retenciones) {
+                            const ret = loteAsoc.retenciones.find(x => x.fotoBase64);
+                            if (ret) fotoSrc = ret.fotoBase64;
+                        } else if (loteAsoc.isExportacion) {
+                            const p = (loteAsoc.pallets || []).find(x => x.fotoBase64);
+                            const s = (loteAsoc.segregacion || []).find(x => x.fotoBase64);
+                            if (p) fotoSrc = p.fotoBase64;
+                            else if (s) fotoSrc = s.fotoBase64;
+                        }
+                    }
+                }
+
+                const fotoBox = document.getElementById('dnFotoContainer');
+                if (fotoSrc) {
+                    document.getElementById('dnFotoImg').src = fotoSrc;
+                    fotoBox.classList.remove('hidden');
+                } else {
+                    fotoBox.classList.add('hidden');
+                }
+
+                document.getElementById('modalDetalleNotif').classList.remove('hidden');
+            };
+
+            document.getElementById('btnCerrarDetalleNotif').addEventListener('click', () => {
+                document.getElementById('modalDetalleNotif').classList.add('hidden');
+            });
+
+            document.getElementById('btnMarcarEstaLeida').addEventListener('click', () => {
+                if (!notificacionActivaId || !usuarioActual) return;
+                const n = notificacionesData.find(x => x.id === notificacionActivaId);
+                if (n) {
+                    if (!n.leidaPor) n.leidaPor = {};
+                    n.leidaPor[usuarioActual.cedula] = true;
+                    n.leidaPor[usuarioActual.nombre] = true;
+                    n.leida = true;
+                    guardarNotificaciones();
+                    renderizarBandejaNotificaciones();
+                }
+                document.getElementById('modalDetalleNotif').classList.add('hidden');
+            });
 
             const toast = document.getElementById('toast');
             const toastMsg = document.getElementById('toastMsg');
@@ -1718,7 +1839,6 @@
                 toast.classList.remove('translate-y-20', 'opacity-0');
                 setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3200);
             }
-
             // ==================== LOGIN Y CAMBIO DE CONTRASEÑA ====================
             const loginOverlay = document.getElementById('loginOverlay');
             const formLogin = document.getElementById('formLogin');
@@ -3261,10 +3381,11 @@
                 if (idExistente) {
                     const idx = lotesData.findIndex(x => x.id === idExistente);
                     if (idx !== -1) lotesData[idx] = nuevo;
-                    mostrarToast('Lote/OT actualizado correctamente');
+                    generarNotificacionNovedadesLote(nuevo, true);
+                    mostrarToast('Lote/OT actualizado • Novedades notificadas');
                 } else {
                     lotesData.unshift(nuevo);
-                    generarNotificacionNovedadesLote(nuevo);
+                    generarNotificacionNovedadesLote(nuevo, false);
                     mostrarToast('Lote/OT registrado • Notificaciones enviadas al proceso');
                 }
 
@@ -4645,6 +4766,18 @@ if __name__ == "__main__":
                             turnoMetrosData = res.record.turnoMetros;
                         }
                         if (Array.isArray(res.record.notificaciones)) {
+                            const mapaLecturasLocales = {};
+                            notificacionesData.forEach(n => {
+                                if (n.leidaPor) mapaLecturasLocales[n.id] = n.leidaPor;
+                            });
+
+                            res.record.notificaciones.forEach(nubeNotif => {
+                                nubeNotif.leidaPor = {
+                                    ...(nubeNotif.leidaPor || {}),
+                                    ...(mapaLecturasLocales[nubeNotif.id] || {})
+                                };
+                            });
+
                             notificacionesData = res.record.notificaciones;
                         }
 
