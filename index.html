@@ -1490,7 +1490,7 @@
                     const img = new Image();
                     img.onload = function() {
                         const canvas = document.createElement('canvas');
-                        const maxDim = 480;
+                        const maxDim = 380;
                         let width = img.width;
                         let height = img.height;
                         if (width > height && width > maxDim) {
@@ -1504,7 +1504,7 @@
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
-                        const base64 = canvas.toDataURL('image/jpeg', 0.5);
+                        const base64 = canvas.toDataURL('image/jpeg', 0.42);
 
                         const valInput = parent.querySelector('.foto-val');
                         const previewWrap = parent.querySelector('.foto-preview-wrap');
@@ -1657,15 +1657,16 @@
                             fecha: loteItem.fechaTurno,
                             tipoNovedad: nov.tipo,
                             mensaje: nov.detalle,
-                            foto: nov.foto || '',
+                            tieneFoto: !!nov.foto,
+                            foto: '',
                             destinatarios: destinatarios,
                             leidaPor: {},
                             leida: false,
                             timestamp: new Date().toLocaleString()
                         });
                         hubonuevas = true;
-                    } else if (!existente.foto && nov.foto) {
-                        existente.foto = nov.foto;
+                    } else if (!existente.tieneFoto && nov.foto) {
+                        existente.tieneFoto = true;
                         existente.leidaPor = {};
                         existente.leida = false;
                         hubonuevas = true;
@@ -1736,7 +1737,19 @@
                                      : n.tipoNovedad === 'Retención' ? 'bg-amber-100 text-amber-900 border-amber-300'
                                      : 'bg-purple-100 text-purple-900 border-purple-300';
 
-                    const iconFoto = n.foto ? '<span class="text-sky-600 font-bold ml-1"><i class="fa-solid fa-camera mr-0.5"></i>Con Foto</span>' : '';
+                    // Determinar si tiene foto (directa o referenciada en el lote)
+                    let fotoDisponible = !!n.foto || !!n.tieneFoto;
+                    if (!fotoDisponible) {
+                        const loteAsoc = lotesData.find(l => l.id === n.loteId || (l.lote === n.lote && (l.proceso || 'Corte') === n.proceso));
+                        if (loteAsoc) {
+                            if (n.tipoNovedad === 'Rechazo') fotoDisponible = (loteAsoc.rechazos || []).some(x => x.fotoBase64);
+                            else if (n.tipoNovedad === 'Retención') fotoDisponible = (loteAsoc.retenciones || []).some(x => x.fotoBase64);
+                            else if (loteAsoc.isExportacion) {
+                                fotoDisponible = (loteAsoc.pallets || []).some(x => x.fotoBase64) || (loteAsoc.segregacion || []).some(x => x.fotoBase64);
+                            }
+                        }
+                    }
+                    const iconFoto = fotoDisponible ? '<span class="text-sky-600 font-bold ml-1"><i class="fa-solid fa-camera mr-0.5"></i>Con Foto</span>' : '';
 
                     return `
                         <div onclick="abrirDetalleNotificacion('${n.id}')" class="cursor-pointer p-3.5 rounded-2xl border transition-all hover:border-sky-400 hover:shadow-md ${estaLeida ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-sky-50/50 border-sky-300 shadow-sm'} space-y-1.5 relative">
@@ -4755,7 +4768,16 @@ if __name__ == "__main__":
                         }
 
                         if (Array.isArray(res.record.lotes)) {
-                            // La nube es la fuente de verdad: si se eliminó en la nube, se elimina en local
+                            // Si la última subida falló (por ejemplo por tamaño o red), protegemos los lotes locales y no dejamos que la nube los borre
+                            if (errorUltimaSubida) {
+                                // Preservamos los lotes locales recién agregados
+                                const idsNube = new Set(res.record.lotes.map(l => l.id));
+                                lotesData.forEach(loc => {
+                                    if (!idsNube.has(loc.id)) {
+                                        res.record.lotes.unshift(loc);
+                                    }
+                                });
+                            }
                             if (JSON.stringify(lotesData) !== JSON.stringify(res.record.lotes)) {
                                 lotesData = res.record.lotes;
                                 huboCambios = true;
@@ -4794,6 +4816,7 @@ if __name__ == "__main__":
             }
 
             let subiendoNubeActivo = false;
+            let errorUltimaSubida = false;
             async function subirDatosANube() {
                 if (subiendoNubeActivo) return;
                 subiendoNubeActivo = true;
@@ -4812,13 +4835,17 @@ if __name__ == "__main__":
                         })
                     });
                     if (!putRes.ok) {
+                        errorUltimaSubida = true;
                         const errJson = await putRes.json().catch(() => ({}));
                         console.error("Error de subida JSONBin:", putRes.status, errJson);
                         if (putRes.status === 413) {
-                            mostrarToast("Error: Tamaño máximo de fotos excedido en servidor gratuito", true);
+                            mostrarToast("Aviso: Límite de servidor gratuito alcanzado al subir foto", true);
                         }
+                    } else {
+                        errorUltimaSubida = false;
                     }
                 } catch (err) {
+                    errorUltimaSubida = true;
                     console.error("Error de conexión al subir a nube", err);
                 } finally {
                     subiendoNubeActivo = false;
