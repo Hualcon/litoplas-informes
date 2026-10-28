@@ -4768,9 +4768,7 @@ if __name__ == "__main__":
                         }
 
                         if (Array.isArray(res.record.lotes)) {
-                            // Si la última subida falló (por ejemplo por tamaño o red), protegemos los lotes locales y no dejamos que la nube los borre
                             if (errorUltimaSubida) {
-                                // Preservamos los lotes locales recién agregados
                                 const idsNube = new Set(res.record.lotes.map(l => l.id));
                                 lotesData.forEach(loc => {
                                     if (!idsNube.has(loc.id)) {
@@ -4787,20 +4785,29 @@ if __name__ == "__main__":
                         if (Array.isArray(res.record.turnoMetros)) {
                             turnoMetrosData = res.record.turnoMetros;
                         }
+
                         if (Array.isArray(res.record.notificaciones)) {
-                            const mapaLecturasLocales = {};
-                            notificacionesData.forEach(n => {
-                                if (n.leidaPor) mapaLecturasLocales[n.id] = n.leidaPor;
+                            // FUSIÓN INTELIGENTE DE NOTIFICACIONES: Nunca borrar notificaciones locales recién creadas
+                            const mapaNotifs = new Map();
+                            // Primero cargar las de la nube
+                            res.record.notificaciones.forEach(n => {
+                                if (n && n.id) mapaNotifs.set(n.id, n);
                             });
-
-                            res.record.notificaciones.forEach(nubeNotif => {
-                                nubeNotif.leidaPor = {
-                                    ...(nubeNotif.leidaPor || {}),
-                                    ...(mapaLecturasLocales[nubeNotif.id] || {})
-                                };
+                            // Integrar las locales para no perder las recién creadas
+                            notificacionesData.forEach(loc => {
+                                if (loc && loc.id) {
+                                    if (!mapaNotifs.has(loc.id)) {
+                                        mapaNotifs.set(loc.id, loc);
+                                        huboCambios = true;
+                                    } else {
+                                        const nubeN = mapaNotifs.get(loc.id);
+                                        nubeN.leidaPor = { ...(nubeN.leidaPor || {}), ...(loc.leidaPor || {}) };
+                                        if (loc.leida) nubeN.leida = true;
+                                    }
+                                }
                             });
-
-                            notificacionesData = res.record.notificaciones;
+                            notificacionesData = Array.from(mapaNotifs.values());
+                            actualizarBadgeNotificaciones();
                         }
 
                         if (usuarioActual && huboCambios) {
@@ -4816,9 +4823,14 @@ if __name__ == "__main__":
             }
 
             let subiendoNubeActivo = false;
+            let pendienteSubir = false;
             let errorUltimaSubida = false;
+
             async function subirDatosANube() {
-                if (subiendoNubeActivo) return;
+                if (subiendoNubeActivo) {
+                    pendienteSubir = true;
+                    return;
+                }
                 subiendoNubeActivo = true;
                 try {
                     const putRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
@@ -4838,9 +4850,6 @@ if __name__ == "__main__":
                         errorUltimaSubida = true;
                         const errJson = await putRes.json().catch(() => ({}));
                         console.error("Error de subida JSONBin:", putRes.status, errJson);
-                        if (putRes.status === 413) {
-                            mostrarToast("Aviso: Límite de servidor gratuito alcanzado al subir foto", true);
-                        }
                     } else {
                         errorUltimaSubida = false;
                     }
@@ -4849,10 +4858,12 @@ if __name__ == "__main__":
                     console.error("Error de conexión al subir a nube", err);
                 } finally {
                     subiendoNubeActivo = false;
+                    if (pendienteSubir) {
+                        pendienteSubir = false;
+                        subirDatosANube();
+                    }
                 }
             }
-
-            // Sincronización automática en segundo plano cada 5 segundos para actualizar dispositivos en tiempo real
             setInterval(() => {
                 if (document.getElementById('modalLote').classList.contains('hidden') && 
                     document.getElementById('modalMetasMaquinas').classList.contains('hidden')) {
