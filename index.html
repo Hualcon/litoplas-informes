@@ -1446,7 +1446,7 @@
                     const img = new Image();
                     img.onload = function() {
                         const canvas = document.createElement('canvas');
-                        const maxDim = 800;
+                        const maxDim = 480;
                         let width = img.width;
                         let height = img.height;
                         if (width > height && width > maxDim) {
@@ -1460,7 +1460,7 @@
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
-                        const base64 = canvas.toDataURL('image/jpeg', 0.65);
+                        const base64 = canvas.toDataURL('image/jpeg', 0.5);
 
                         const valInput = parent.querySelector('.foto-val');
                         const previewWrap = parent.querySelector('.foto-preview-wrap');
@@ -1598,7 +1598,6 @@
                         fecha: loteItem.fechaTurno,
                         tipoNovedad: nov.tipo,
                         mensaje: nov.detalle,
-                        foto: nov.foto,
                         destinatarios: destinatarios,
                         leida: false,
                         timestamp: new Date().toLocaleString()
@@ -4639,25 +4638,12 @@ if __name__ == "__main__":
                 }
             }
 
+            let subiendoNubeActivo = false;
             async function subirDatosANube() {
+                if (subiendoNubeActivo) return;
+                subiendoNubeActivo = true;
                 try {
-                    const response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-                        headers: { 'X-Master-Key': API_KEY },
-                        cache: 'no-store'
-                    });
-                    const res = await response.json();
-                    let lotesFinales = [...lotesData];
-
-                    if (res && res.record && Array.isArray(res.record.lotes)) {
-                        const idsActuales = new Set(lotesFinales.map(l => l.id));
-                        res.record.lotes.forEach(loteNube => {
-                            if (!idsActuales.has(loteNube.id)) {
-                                lotesFinales.push(loteNube);
-                            }
-                        });
-                    }
-
-                    await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                    const putRes = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
                         method: 'PUT',
                         headers: {
                             'Content-Type': 'application/json',
@@ -4665,13 +4651,22 @@ if __name__ == "__main__":
                         },
                         body: JSON.stringify({
                             usuarios: usuariosLista,
-                            lotes: lotesFinales,
+                            lotes: lotesData,
                             turnoMetros: turnoMetrosData,
                             notificaciones: notificacionesData
                         })
                     });
+                    if (!putRes.ok) {
+                        const errJson = await putRes.json().catch(() => ({}));
+                        console.error("Error de subida JSONBin:", putRes.status, errJson);
+                        if (putRes.status === 413) {
+                            mostrarToast("Error: Tamaño máximo de fotos excedido en servidor gratuito", true);
+                        }
+                    }
                 } catch (err) {
-                    console.error("Error al subir a nube", err);
+                    console.error("Error de conexión al subir a nube", err);
+                } finally {
+                    subiendoNubeActivo = false;
                 }
             }
 
